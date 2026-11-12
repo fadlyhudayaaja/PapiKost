@@ -4,6 +4,8 @@ import '../../../../core/network/mock_service.dart';
 import '../../../../data/models/reservation_model.dart';
 import '../../../../data/models/ticket_model.dart';
 import '../../../../data/models/user_model.dart';
+import '../../../admin/presentation/providers/admin_provider.dart'
+    show RenterSubmission, VerificationStatus;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // OwnerStats
@@ -103,6 +105,10 @@ class OwnerProvider extends ChangeNotifier {
   List<OwnerKostModel> _kostList = [];
   bool _kostLoading = false;
 
+  // ─── Berkas Penyewa ────────────────────────────────────────────────────────
+  List<RenterSubmission> _renterFiles = [];
+  bool _renterFilesLoading = false;
+
   // ─── Profil Owner (in-memory) ─────────────────────────────────────────────
   UserModel _ownerProfile = const UserModel(
     id: 2,
@@ -124,6 +130,10 @@ class OwnerProvider extends ChangeNotifier {
   List<OwnerKostModel> get kostList => _kostList;
   bool get kostLoading => _kostLoading;
   UserModel get ownerProfile => _ownerProfile;
+
+  // Berkas penyewa
+  List<RenterSubmission> get renterFiles => _renterFiles;
+  bool get renterFilesLoading => _renterFilesLoading;
 
   List<ReservationModel> get pendingReservations => _reservations
       .where((r) => r.status == AppConstants.reservationStatusPending)
@@ -169,10 +179,13 @@ class OwnerProvider extends ChangeNotifier {
         if (_stats != null) {
           _stats = OwnerStats(
             totalRooms: _stats!.totalRooms,
-            occupiedRooms:
-                approve ? _stats!.occupiedRooms + 1 : _stats!.occupiedRooms,
-            pendingReservations:
-                (_stats!.pendingReservations - 1).clamp(0, 999),
+            occupiedRooms: approve
+                ? _stats!.occupiedRooms + 1
+                : _stats!.occupiedRooms,
+            pendingReservations: (_stats!.pendingReservations - 1).clamp(
+              0,
+              999,
+            ),
             pendingTickets: _stats!.pendingTickets,
           );
         }
@@ -312,6 +325,119 @@ class OwnerProvider extends ChangeNotifier {
     notifyListeners();
     return true;
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // BERKAS PENYEWA (Owner melihat & merespons)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// Load berkas penyewa milik kost owner ini
+  Future<void> fetchRenterFiles() async {
+    _renterFilesLoading = true;
+    notifyListeners();
+    await Future.delayed(_delay);
+    // Filter hanya kost milik owner ini (kostId 1 & 2)
+    _renterFiles = _buildMockRenterFiles();
+    _renterFilesLoading = false;
+    notifyListeners();
+  }
+
+  /// ACC berkas penyewa — owner menyetujui
+  Future<bool> accRenterFile(int submissionId) async {
+    if (_isSubmitting) return false;
+    _isSubmitting = true;
+    notifyListeners();
+    await Future.delayed(_delay);
+    final idx = _renterFiles.indexWhere((s) => s.id == submissionId);
+    if (idx != -1) {
+      _renterFiles[idx] = _renterFiles[idx].copyWith(
+        status: VerificationStatus.acc,
+      );
+    }
+    _isSubmitting = false;
+    notifyListeners();
+    return idx != -1;
+  }
+
+  /// Tolak berkas penyewa dengan alasan
+  Future<bool> rejectRenterFile(int submissionId, String reason) async {
+    if (_isSubmitting) return false;
+    if (reason.trim().isEmpty) return false;
+    _isSubmitting = true;
+    notifyListeners();
+    await Future.delayed(_delay);
+    final idx = _renterFiles.indexWhere((s) => s.id == submissionId);
+    if (idx != -1) {
+      _renterFiles[idx] = _renterFiles[idx].copyWith(
+        status: VerificationStatus.tolak,
+        rejectionReason: reason.trim(),
+      );
+    }
+    _isSubmitting = false;
+    notifyListeners();
+    return idx != -1;
+  }
+
+  static List<RenterSubmission> _buildMockRenterFiles() => [
+    RenterSubmission(
+      id: 101,
+      name: 'Budi Santoso',
+      email: 'budi.santoso@gmail.com',
+      phone: '081234567890',
+      ktpNumber: '1271011505000001',
+      occupation: 'Mahasiswa',
+      emergencyContact: 'Ibu Santoso',
+      emergencyPhone: '081111111111',
+      kostName: 'Kost Mawar Indah',
+      kostId: 1,
+      ownerName: 'Pak Budi Santoso',
+      ktpImageUrl:
+          'https://images.unsplash.com/photo-1554774853-719586f82d77?w=600',
+      fotoSelfieUrl:
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600',
+      suratKeteranganUrl:
+          'https://images.unsplash.com/photo-1568234928966-359c35dd8327?w=600',
+      submittedAt: DateTime.now().subtract(const Duration(days: 3)),
+    ),
+    RenterSubmission(
+      id: 102,
+      name: 'Dewi Anggraini',
+      email: 'dewi.anggraini@gmail.com',
+      phone: '082345678901',
+      ktpNumber: '1271022020010002',
+      occupation: 'Mahasiswi',
+      emergencyContact: 'Bapak Anggraini',
+      emergencyPhone: '082222222222',
+      kostName: 'Kost Mawar Indah',
+      kostId: 1,
+      ownerName: 'Pak Budi Santoso',
+      ktpImageUrl:
+          'https://images.unsplash.com/photo-1554774853-719586f82d77?w=600',
+      fotoSelfieUrl:
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600',
+      submittedAt: DateTime.now().subtract(const Duration(days: 1)),
+    ),
+    RenterSubmission(
+      id: 103,
+      name: 'Ahmad Fauzi',
+      email: 'ahmad.fauzi@gmail.com',
+      phone: '083456789012',
+      ktpNumber: '1271030303990003',
+      occupation: 'Karyawan Swasta',
+      emergencyContact: 'Ibu Fauzi',
+      emergencyPhone: '083333333333',
+      kostName: 'Kost Bumi Putera',
+      kostId: 2,
+      ownerName: 'Pak Budi Santoso',
+      ktpImageUrl:
+          'https://images.unsplash.com/photo-1554774853-719586f82d77?w=600',
+      fotoSelfieUrl:
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600',
+      suratKeteranganUrl:
+          'https://images.unsplash.com/photo-1568234928966-359c35dd8327?w=600',
+      status: VerificationStatus.acc,
+      submittedAt: DateTime.now().subtract(const Duration(days: 10)),
+    ),
+  ];
 
   // ── Profil Owner ──────────────────────────────────────────────────────────
   Future<bool> updateProfile({

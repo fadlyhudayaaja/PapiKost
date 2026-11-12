@@ -7,8 +7,11 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
+import '../../../admin/presentation/providers/admin_provider.dart'
+    show VerificationStatus;
 import '../providers/owner_provider.dart';
 import 'kost_management_page.dart';
+import 'owner_renter_files_page.dart';
 
 class OwnerDashboardPage extends StatefulWidget {
   const OwnerDashboardPage({super.key});
@@ -23,6 +26,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<OwnerProvider>().fetchDashboard();
+      context.read<OwnerProvider>().fetchRenterFiles();
     });
   }
 
@@ -148,6 +152,20 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                       color: AppColors.error,
                       onTap: () => context.go(AppRoutes.ownerTickets),
                     ),
+                    _StatCard(
+                      icon: Icons.folder_shared_rounded,
+                      label: 'Berkas Penyewa',
+                      value:
+                          '${provider.renterFiles.where((f) => f.status == VerificationStatus.proses).length}',
+                      subtitle: 'menunggu',
+                      color: const Color(0xFF7B1FA2),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const OwnerRenterFilesPage(),
+                        ),
+                      ),
+                    ),
                   ]),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
@@ -197,7 +215,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate((context, i) {
                       final res = provider.pendingReservations[i];
@@ -282,6 +300,166 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
                         ),
                       );
                     }, childCount: provider.pendingReservations.take(3).length),
+                  ),
+                ),
+
+              // ── Berkas Penyewa Section ────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Berkas Penyewa', style: AppTextStyles.h3),
+                      TextButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const OwnerRenterFilesPage(),
+                          ),
+                        ),
+                        child: const Text('Lihat Semua'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              if (provider.renterFilesLoading)
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (_, __) => const Padding(
+                        padding: EdgeInsets.only(bottom: 10),
+                        child: ShimmerBox(height: 70),
+                      ),
+                      childCount: 2,
+                    ),
+                  ),
+                )
+              else if (provider.renterFiles
+                  .where((f) => f.status == VerificationStatus.proses)
+                  .isEmpty)
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Tidak ada berkas yang menunggu persetujuan',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.grey500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final pending = provider.renterFiles
+                            .where((f) => f.status == VerificationStatus.proses)
+                            .toList();
+                        final file = pending[i];
+                        return GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChangeNotifierProvider.value(
+                                value: context.read<OwnerProvider>(),
+                                child: OwnerRenterFileDetailPage(file: file),
+                              ),
+                            ),
+                          ),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: const Color(
+                                    0xFF7B1FA2,
+                                  ).withValues(alpha: 0.1),
+                                  child: Text(
+                                    file.name.isNotEmpty
+                                        ? file.name[0].toUpperCase()
+                                        : 'P',
+                                    style: AppTextStyles.labelLarge.copyWith(
+                                      color: const Color(0xFF7B1FA2),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        file.name,
+                                        style: AppTextStyles.labelLarge,
+                                      ),
+                                      Text(
+                                        '${file.occupation} · ${file.kostName}',
+                                        style: AppTextStyles.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warningLight,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'Pending',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.warning,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 14,
+                                  color: AppColors.grey400,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      childCount: provider.renterFiles
+                          .where((f) => f.status == VerificationStatus.proses)
+                          .take(3)
+                          .length,
+                    ),
                   ),
                 ),
             ],

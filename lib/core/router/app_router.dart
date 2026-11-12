@@ -37,10 +37,13 @@ import '../../features/owner/presentation/pages/owner_profile_page.dart';
 import '../../features/owner/presentation/pages/reservation_management_page.dart';
 import '../../features/owner/presentation/pages/owner_ticket_page.dart';
 import '../../features/owner/presentation/pages/add_kost_page.dart';
+import '../../features/owner/presentation/pages/owner_renter_files_page.dart';
 
 // ── Admin ──
 import '../../features/admin/presentation/pages/admin_dashboard_page.dart';
 import '../../features/admin/presentation/pages/owner_verification_page.dart';
+import '../../features/admin/presentation/pages/renter_verification_page.dart';
+import '../../features/admin/presentation/pages/user_management_page.dart';
 import '../../features/admin/presentation/providers/admin_provider.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -82,10 +85,13 @@ class AppRoutes {
   static const String ownerAddKost = '/owner/kost/add';
   static const String reservationManagement = '/owner/reservations';
   static const String ownerTickets = '/owner/tickets';
+  static const String ownerRenterFiles = '/owner/renter-files';
 
   // ── Admin ─────────────────────────────────────────────────────────────────
   static const String adminDashboard = '/admin';
   static const String adminVerifyOwners = '/admin/verify-owners';
+  static const String adminVerifyRenters = '/admin/verify-renters';
+  static const String adminUserManagement = '/admin/users';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -238,9 +244,23 @@ GoRouter createRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: AppRoutes.adminVerifyOwners,
-        builder: (context, __) => ChangeNotifierProvider.value(
+        builder: (context, _) => ChangeNotifierProvider.value(
           value: context.read<AdminProvider>(),
           child: const OwnerVerificationPage(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.adminVerifyRenters,
+        builder: (context, _) => ChangeNotifierProvider.value(
+          value: context.read<AdminProvider>(),
+          child: const RenterVerificationPage(),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.adminUserManagement,
+        builder: (context, _) => ChangeNotifierProvider.value(
+          value: context.read<AdminProvider>(),
+          child: const UserManagementPage(),
         ),
       ),
 
@@ -269,6 +289,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.ownerAddKost,
         builder: (_, __) => const AddKostPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.ownerRenterFiles,
+        builder: (_, __) => const OwnerRenterFilesPage(),
       ),
     ],
   );
