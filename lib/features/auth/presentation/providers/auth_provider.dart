@@ -1,93 +1,68 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/network/mock_service.dart';
 import '../../../../data/models/user_model.dart';
+import '../../../../data/repositories/auth_repository.dart';
 
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
 class AuthProvider extends ChangeNotifier {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
-
+  AuthProvider({AuthRepository? repository})
+    : _repository = repository ?? AuthRepository.instance;
+  final AuthRepository _repository;
   AuthStatus _status = AuthStatus.initial;
   UserModel? _currentUser;
   String? _errorMessage;
+  bool _isUpdatingProfile = false;
+  int _sessionVersion = 0;
 
   AuthStatus get status => _status;
   UserModel? get currentUser => _currentUser;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   bool get isLoading => _status == AuthStatus.loading;
-
+  bool get isUpdatingProfile => _isUpdatingProfile;
   String get userRole => _currentUser?.role ?? '';
   bool get isRenter => userRole == AppConstants.roleRenter;
   bool get isOwner => userRole == AppConstants.roleOwner;
   bool get isAdmin => userRole == AppConstants.roleAdmin;
 
-  // ── Cek session lokal saat splash ─────────────────────────────────────────
   Future<void> checkAuthStatus() async {
+    if (isLoading) return;
+    _sessionVersion++;
+    _currentUser = null;
+    _errorMessage = null;
     _setStatus(AuthStatus.loading);
     try {
-      final token = await _storage.read(key: AppConstants.tokenKey);
-      final role = await _storage.read(key: AppConstants.userRoleKey);
-      final name = await _storage.read(key: AppConstants.userNameKey);
-      final idStr = await _storage.read(key: AppConstants.userIdKey);
-
-      if (token == null || role == null) {
-        _setStatus(AuthStatus.unauthenticated);
-        return;
-      }
-
-      // Restore user dari storage lokal (tidak perlu hit network)
-      _currentUser = UserModel(
-        id: int.tryParse(idStr ?? '0') ?? 0,
-        name: name ?? 'Pengguna',
-        email: '',
-        phone: '',
-        role: role,
-        isVerified: true,
+      _currentUser = await _repository.getCurrentUser();
+      _setStatus(
+        _currentUser == null
+            ? AuthStatus.unauthenticated
+            : AuthStatus.authenticated,
       );
-      _setStatus(AuthStatus.authenticated);
-    } catch (_) {
-      await _storage.deleteAll();
-      _setStatus(AuthStatus.unauthenticated);
+    } catch (error) {
+      _errorMessage = AuthRepository.errorMessage(error);
+      _setStatus(AuthStatus.error);
     }
   }
 
-  // ── Login via Mock ─────────────────────────────────────────────────────────
   Future<bool> login({required String email, required String password}) async {
-    _setStatus(AuthStatus.loading);
+    if (isLoading) return false;
+    _sessionVersion++;
+    _currentUser = null;
     _errorMessage = null;
+    _setStatus(AuthStatus.loading);
     try {
-      final result = await MockService.login(email, password);
-      _currentUser = result['user'] as UserModel;
-      final token = result['token'] as String;
-
-      await _storage.write(key: AppConstants.tokenKey, value: token);
-      await _storage.write(
-        key: AppConstants.userRoleKey,
-        value: _currentUser!.role,
-      );
-      await _storage.write(
-        key: AppConstants.userIdKey,
-        value: _currentUser!.id.toString(),
-      );
-      await _storage.write(
-        key: AppConstants.userNameKey,
-        value: _currentUser!.name,
-      );
-
+      _currentUser = await _repository.login(email: email, password: password);
       _setStatus(AuthStatus.authenticated);
       return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+    } catch (error) {
+      _errorMessage = AuthRepository.errorMessage(error);
       _setStatus(AuthStatus.error);
       return false;
     }
   }
 
-  // ── Register via Mock ──────────────────────────────────────────────────────
   Future<bool> register({
     required String name,
     required String email,
@@ -95,10 +70,13 @@ class AuthProvider extends ChangeNotifier {
     required String phone,
     required String role,
   }) async {
-    _setStatus(AuthStatus.loading);
+    if (isLoading) return false;
+    _sessionVersion++;
+    _currentUser = null;
     _errorMessage = null;
+    _setStatus(AuthStatus.loading);
     try {
-      await MockService.register(
+      await _repository.register(
         name: name,
         email: email,
         password: password,
@@ -107,28 +85,62 @@ class AuthProvider extends ChangeNotifier {
       );
       _setStatus(AuthStatus.unauthenticated);
       return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+    } catch (error) {
+      _errorMessage = AuthRepository.errorMessage(error);
       _setStatus(AuthStatus.error);
       return false;
     }
   }
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
   Future<void> logout() async {
-    await _storage.deleteAll();
+    _sessionVersion++;
+    await _repository.logout();
     _currentUser = null;
     _errorMessage = null;
     _setStatus(AuthStatus.unauthenticated);
   }
 
-  void clearError() {
+  Future<void> refreshProfile() async {
+    final version = _sessionVersion;
+    final user = await _repository.getCurrentUser();
+    if (version != _sessionVersion) return;
+    if (user == null) throw const AuthFailure('Silakan login kembali.');
+    _currentUser = user;
+    notifyListeners();
+  }
+
+  Future<bool> updateProfile({
+    required String name,
+    required String phone,
+    String? bio,
+  }) async {
+    if (_isUpdatingProfile || !isAuthenticated) return false;
+    _isUpdatingProfile = true;
+    final version = _sessionVersion;
     _errorMessage = null;
-    if (_status == AuthStatus.error) {
-      _setStatus(AuthStatus.unauthenticated);
-    } else {
+    notifyListeners();
+    try {
+      final user = await _repository.updateProfile(
+        name: name,
+        phone: phone,
+        bio: bio,
+      );
+      if (version != _sessionVersion) return false;
+      _currentUser = user;
+      return true;
+    } catch (error) {
+      _errorMessage = AuthRepository.errorMessage(error);
+      return false;
+    } finally {
+      _isUpdatingProfile = false;
       notifyListeners();
     }
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    if (_status == AuthStatus.error) _status = AuthStatus.unauthenticated;
+    notifyListeners();
   }
 
   void _setStatus(AuthStatus status) {

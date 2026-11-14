@@ -172,6 +172,16 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 32),
 
                 // ── Login Button ───────────────────────────────────────
+                if (auth.errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      auth.errorMessage!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ),
                 AppButton(
                   text: 'Masuk',
                   onPressed: auth.isLoading ? null : _handleLogin,

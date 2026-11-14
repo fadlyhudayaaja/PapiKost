@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/router/app_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
@@ -52,7 +52,6 @@ class _SplashPageState extends State<SplashPage>
 
   // ── State ──────────────────────────────────────────────────────────────────
   // ignore: unused_field
-  bool _isInitialized = false;
 
   @override
   void initState() {
@@ -136,58 +135,10 @@ class _SplashPageState extends State<SplashPage>
 
   // ── 2. Logika inisialisasi & routing ──────────────────────────────────────
   Future<void> _runInitialization() async {
-    // Jalankan pengecekan sesi dan timer animasi secara paralel
-    final results = await Future.wait([
-      _checkUserSession(),
-      // Minimal splash time 3 detik agar animasi tampil penuh
-      Future.delayed(const Duration(milliseconds: 3000)),
-    ]);
-
-    _isInitialized = true;
+    // Tampilkan animasi sebelum perubahan status memicu redirect router.
+    await Future<void>.delayed(const Duration(seconds: 3));
     if (!mounted) return;
-
-    final hasSession = results[0] as bool;
-    _navigateNext(hasSession);
-  }
-
-  /// Simulasi pengecekan token JWT di Flutter Secure Storage.
-  /// Ganti isi fungsi ini dengan logika AuthProvider.checkAuthStatus()
-  /// saat backend sudah siap.
-  Future<bool> _checkUserSession() async {
-    // Simulasi delay pengecekan token (2 detik)
-    await Future.delayed(const Duration(milliseconds: 2000));
-
-    const storage = FlutterSecureStorage();
-    final token = await storage.read(key: AppConstants.tokenKey);
-    final role = await storage.read(key: AppConstants.userRoleKey);
-
-    return token != null && role != null;
-  }
-
-  /// Navigasi ke halaman berikutnya dengan transisi halus.
-  void _navigateNext(bool hasSession) {
-    if (!mounted) return;
-
-    if (hasSession) {
-      // Ada sesi → cek role dan arahkan ke dashboard yang sesuai
-      const storage = FlutterSecureStorage();
-      storage.read(key: AppConstants.userRoleKey).then((role) {
-        if (!mounted) return;
-        switch (role) {
-          case AppConstants.roleOwner:
-            context.go(AppRoutes.ownerDashboard);
-            break;
-          case AppConstants.roleAdmin:
-            context.go(AppRoutes.adminDashboard);
-            break;
-          default:
-            context.go(AppRoutes.renterHome);
-        }
-      });
-    } else {
-      // Tidak ada sesi → ke halaman Login
-      context.go(AppRoutes.login);
-    }
+    await context.read<AuthProvider>().checkAuthStatus();
   }
 
   @override
