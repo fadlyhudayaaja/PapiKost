@@ -1,24 +1,49 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'data/repositories/auth_repository.dart';
+import 'data/repositories/admin_user_repository.dart';
+import 'data/repositories/kost_repository.dart';
+import 'data/repositories/owner_verification_repository.dart';
+import 'data/repositories/reservation_repository.dart';
+import 'data/repositories/ticket_repository.dart';
 import 'features/admin/presentation/providers/admin_provider.dart';
+import 'features/admin/presentation/providers/admin_users_provider.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/kost/presentation/providers/kost_provider.dart';
 import 'features/owner/presentation/providers/owner_provider.dart';
 import 'features/papibot/presentation/providers/papibot_provider.dart';
 import 'features/renter/ticket/providers/renter_ticket_provider.dart';
-import 'features/ticket/presentation/providers/ticket_provider.dart';
 
-void main() async {
+Future<void> main() => runPapiKost();
+
+Future<void> runPapiKost({
+  AuthRepository? authRepository,
+  KostRepository? kostRepository,
+  ReservationRepository? reservationRepository,
+  TicketRepository? ticketRepository,
+  OwnerVerificationRepository? ownerVerificationRepository,
+  AdminUserRepository? adminUserRepository,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // FIX: Inisialisasi locale data untuk intl (mencegah LocaleDataException)
-  await initializeDateFormatting('id_ID', null);
+  // Android membaca konfigurasi dari android/app/google-services.json.
+  // Platform lain perlu didaftarkan di Firebase sebelum diaktifkan.
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await Firebase.initializeApp();
+  }
+
+  // Siapkan format tanggal sebelum provider, router, dan halaman dibuat.
+  await initializeDateFormatting('id_ID');
+  Intl.defaultLocale = 'id_ID';
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -34,20 +59,55 @@ void main() async {
 
   // AuthProvider dibuat sekali di luar widget tree
   // agar GoRouter bisa pakai instance yang sama
-  final authProvider = AuthProvider();
+  final authProvider = AuthProvider(repository: authRepository);
 
   runApp(
     MultiProvider(
       providers: [
+        Provider<OwnerVerificationRepository>.value(
+          value:
+              ownerVerificationRepository ??
+              OwnerVerificationRepository.instance,
+        ),
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
-        ChangeNotifierProvider(create: (_) => KostProvider()),
+        Provider<KostRepository>.value(
+          value: kostRepository ?? KostRepository.instance,
+        ),
+        Provider<ReservationRepository>.value(
+          value: reservationRepository ?? ReservationRepository.instance,
+        ),
+        Provider<TicketRepository>.value(
+          value: ticketRepository ?? TicketRepository.instance,
+        ),
+        ChangeNotifierProvider(
+          create: (context) =>
+              KostProvider(repository: context.read<KostRepository>()),
+        ),
         ChangeNotifierProvider(create: (_) => PapibotProvider()),
-        ChangeNotifierProvider(create: (_) => TicketProvider()),
-        ChangeNotifierProvider(create: (_) => OwnerProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, OwnerProvider>(
+          create: (context) => OwnerProvider(
+            repository: context.read<KostRepository>(),
+            reservationRepository: context.read<ReservationRepository>(),
+            ticketRepository: context.read<TicketRepository>(),
+          ),
+          update: (_, auth, owner) => owner!..bindUser(auth.currentUser),
+        ),
         // Provider untuk CRUD Laporan Kerusakan (Renter UTS)
-        ChangeNotifierProvider(create: (_) => RenterTicketProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, RenterTicketProvider>(
+          create: (context) => RenterTicketProvider(
+            repository: context.read<TicketRepository>(),
+          ),
+          update: (_, auth, tickets) => tickets!..bindUser(auth.currentUser),
+        ),
         // Provider untuk Admin (verifikasi berkas)
-        ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, AdminUsersProvider>(
+          create: (_) => AdminUsersProvider(repository: adminUserRepository),
+          update: (_, auth, users) => users!..bindUser(auth.currentUser),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, AdminProvider>(
+          create: (_) => AdminProvider(repository: ownerVerificationRepository),
+          update: (_, auth, admin) => admin!..bindUser(auth.currentUser),
+        ),
       ],
       child: PapiKostApp(authProvider: authProvider),
     ),

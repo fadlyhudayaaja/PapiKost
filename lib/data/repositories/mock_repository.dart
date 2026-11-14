@@ -35,7 +35,7 @@ class MockRepository {
 
   // Profil user aktif (disimpan in-memory selama sesi)
   UserModel _activeUser = const UserModel(
-    id: 1,
+    id: '1',
     name: 'Andi Pratama',
     email: 'renter@papikost.com',
     phone: '081234567890',
@@ -46,7 +46,7 @@ class MockRepository {
   // Daftar pemilik kost pending verifikasi (admin)
   final List<UserModel> _pendingOwnerDb = [
     UserModel(
-      id: 20,
+      id: '20',
       name: 'Pak Joko Susilo',
       email: 'joko@example.com',
       phone: '081234567890',
@@ -54,7 +54,7 @@ class MockRepository {
       isVerified: false,
     ),
     UserModel(
-      id: 21,
+      id: '21',
       name: 'Bu Siti Rahayu',
       email: 'siti@example.com',
       phone: '082345678901',
@@ -62,7 +62,7 @@ class MockRepository {
       isVerified: false,
     ),
     UserModel(
-      id: 22,
+      id: '22',
       name: 'Bapak Hendra Gunawan',
       email: 'hendra@example.com',
       phone: '083456789012',
@@ -108,7 +108,7 @@ class MockRepository {
     }
   }
 
-  Future<KostModel> getKostById(int id, {bool simulateError = false}) async {
+  Future<KostModel> getKostById(String id, {bool simulateError = false}) async {
     await Future.delayed(_delay);
     try {
       if (simulateError) {
@@ -140,7 +140,7 @@ class MockRepository {
   }
 
   Future<ReservationModel> createReservation({
-    required int kostId,
+    required String kostId,
     required bool isSplitBill,
     int? splitMemberCount,
     required DateTime checkInDate,
@@ -155,7 +155,7 @@ class MockRepository {
       final kost = _kostDb.firstWhere((k) => k.id == kostId);
       final newId = _reservationDb.length + 100;
       final res = ReservationModel(
-        id: newId,
+        id: newId.toString(),
         kostId: kostId,
         kostName: kost.name,
         kostAddress: kost.address,
@@ -198,7 +198,7 @@ class MockRepository {
   }
 
   Future<TicketModel> getTicketById(
-    int id, {
+    String id, {
     bool simulateError = false,
   }) async {
     await Future.delayed(_delay);
@@ -227,9 +227,9 @@ class MockRepository {
       if (simulateError) throw Exception('Gagal membuat laporan. Coba lagi.');
       final newId = _ticketDb.isEmpty
           ? 1
-          : (_ticketDb.map((t) => t.id).reduce((a, b) => a > b ? a : b) + 1);
+          : (_ticketDb.map((t) => int.parse(t.id)).reduce((a, b) => a > b ? a : b) + 1);
       final ticket = TicketModel(
-        id: newId,
+        id: newId.toString(),
         title: title,
         description: description,
         category: category,
@@ -237,7 +237,7 @@ class MockRepository {
         imageUrls: imageUrls,
         renterId: _activeUser.id,
         renterName: _activeUser.name,
-        kostId: 1,
+        kostId: '1',
         kostName: 'Kost Mawar Indah',
         createdAt: incidentDate,
       );
@@ -250,7 +250,7 @@ class MockRepository {
 
   /// UPDATE — Edit laporan kerusakan
   Future<TicketModel> updateTicket({
-    required int id,
+    required String id,
     required String title,
     required String description,
     required String category,
@@ -287,7 +287,7 @@ class MockRepository {
   }
 
   /// DELETE — Hapus laporan
-  Future<void> deleteTicket(int id, {bool simulateError = false}) async {
+  Future<void> deleteTicket(String id, {bool simulateError = false}) async {
     await Future.delayed(_delay);
     try {
       if (simulateError) throw Exception('Gagal menghapus laporan.');
@@ -369,7 +369,7 @@ class MockRepository {
     await Future.delayed(_delay);
     try {
       if (simulateError) throw Exception('Gagal memproses verifikasi.');
-      _pendingOwnerDb.removeWhere((u) => u.id == userId);
+      _pendingOwnerDb.removeWhere((u) => u.id == userId.toString());
     } catch (e) {
       throw Exception(e.toString().replaceFirst('Exception: ', ''));
     }
@@ -692,7 +692,7 @@ class MockRepository {
     String desc,
   ) {
     return KostModel(
-      id: id,
+      id: id.toString(),
       name: name,
       address: address,
       city: 'Medan',
@@ -715,21 +715,21 @@ class MockRepository {
 
   static List<TicketModel> _buildTicketDb() => [
     TicketModel(
-      id: 1,
+      id: '1',
       title: 'Lampu kamar tidak menyala',
       description:
           'Lampu di kamar saya sudah mati sejak 3 hari lalu dan belum ada yang memperbaiki.',
       category: 'LISTRIK',
       status: AppConstants.ticketStatusPending,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       createdAt: DateTime.now().subtract(const Duration(days: 3)),
     ),
     TicketModel(
-      id: 2,
+      id: '2',
       title: 'Keran kamar mandi bocor',
       description:
           'Keran air di kamar mandi terus menetes dan menyebabkan pemborosan air.',
@@ -738,54 +738,54 @@ class MockRepository {
       imageUrls: [
         'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400',
       ],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       ownerNote: 'Sedang menunggu tukang ledeng.',
       createdAt: DateTime.now().subtract(const Duration(days: 7)),
     ),
     TicketModel(
-      id: 3,
+      id: '3',
       title: 'Pintu lemari rusak',
       description:
           'Engsel pintu lemari patah sehingga tidak bisa ditutup dengan sempurna.',
       category: 'MEBEL',
       status: AppConstants.ticketStatusDone,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       ownerNote: 'Sudah diperbaiki oleh tukang pada 10 Jan.',
       createdAt: DateTime.now().subtract(const Duration(days: 14)),
       updatedAt: DateTime.now().subtract(const Duration(days: 10)),
     ),
     TicketModel(
-      id: 4,
+      id: '4',
       title: 'Retak pada dinding kamar',
       description:
           'Ada retakan memanjang di dinding sebelah timur kamar, khawatir akan semakin melebar.',
       category: 'STRUKTUR',
       status: AppConstants.ticketStatusPending,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       createdAt: DateTime.now().subtract(const Duration(days: 1)),
     ),
     TicketModel(
-      id: 5,
+      id: '5',
       title: 'Kunci kamar susah dibuka',
       description:
           'Kunci kamar terasa seret dan susah dibuka, terutama di pagi hari.',
       category: 'LAINNYA',
       status: AppConstants.ticketStatusPending,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       createdAt: DateTime.now().subtract(const Duration(hours: 5)),
     ),

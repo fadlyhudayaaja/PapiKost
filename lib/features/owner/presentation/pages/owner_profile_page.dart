@@ -8,7 +8,6 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
-import '../providers/owner_provider.dart';
 
 class OwnerProfilePage extends StatelessWidget {
   const OwnerProfilePage({super.key});
@@ -16,8 +15,9 @@ class OwnerProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final ownerProv = context.watch<OwnerProvider>();
-    final user = ownerProv.ownerProfile;
+
+    final user = authProvider.currentUser;
+    if (user == null) return const SizedBox.shrink();
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
@@ -125,9 +125,30 @@ class OwnerProfilePage extends StatelessWidget {
                     title: 'Pengaturan',
                     items: [
                       _MenuTile(
+                        icon: Icons.verified_user_outlined,
+                        label: 'Verifikasi Pemilik',
+                        onTap: () async {
+                          await context.push(AppRoutes.ownerVerification);
+                          if (!context.mounted) return;
+                          try {
+                            await authProvider.refreshProfile();
+                          } catch (_) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Gagal memperbarui profil. Silakan coba lagi.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _MenuTile(
                         icon: Icons.edit_outlined,
                         label: 'Edit Profil',
-                        onTap: () => _showEditProfileSheet(context, ownerProv),
+                        onTap: () =>
+                            _showEditProfileSheet(context, authProvider),
                       ),
                       _MenuTile(
                         icon: Icons.house_outlined,
@@ -177,7 +198,7 @@ class OwnerProfilePage extends StatelessWidget {
   // Helper untuk navigate
   GoRouter from(BuildContext ctx) => GoRouter.of(ctx);
 
-  void _showEditProfileSheet(BuildContext context, OwnerProvider prov) {
+  void _showEditProfileSheet(BuildContext context, AuthProvider prov) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -233,7 +254,7 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
   @override
   void initState() {
     super.initState();
-    final user = context.read<OwnerProvider>().ownerProfile;
+    final user = context.read<AuthProvider>().currentUser!;
     _nameCtrl = TextEditingController(text: user.name);
     _phoneCtrl = TextEditingController(text: user.phone);
     _bioCtrl = TextEditingController(text: user.bio ?? '');
@@ -249,8 +270,8 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    final prov = context.read<OwnerProvider>();
-    if (prov.isSubmitting) return;
+    final prov = context.read<AuthProvider>();
+    if (prov.isUpdatingProfile) return;
 
     final ok = await prov.updateProfile(
       name: _nameCtrl.text.trim(),
@@ -262,7 +283,9 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          ok ? 'Profil berhasil diperbarui!' : 'Gagal menyimpan profil.',
+          ok
+              ? 'Profil berhasil diperbarui!'
+              : (prov.errorMessage ?? 'Gagal menyimpan profil.'),
         ),
         backgroundColor: ok ? AppColors.success : AppColors.error,
         behavior: SnackBarBehavior.floating,
@@ -274,7 +297,7 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final prov = context.watch<OwnerProvider>();
+    final prov = context.watch<AuthProvider>();
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
@@ -317,7 +340,8 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => setState(() {}),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Nama wajib diisi.';
+                    if (v == null || v.trim().isEmpty)
+                      return 'Nama wajib diisi.';
                     if (v.trim().length < 3) return 'Nama minimal 3 karakter.';
                     return null;
                   },
@@ -333,8 +357,10 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
                   textInputAction: TextInputAction.next,
                   maxLength: 15,
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Nomor HP wajib diisi.';
-                    if (v.trim().length < 10) return 'Nomor HP minimal 10 digit.';
+                    if (v == null || v.trim().isEmpty)
+                      return 'Nomor HP wajib diisi.';
+                    if (v.trim().length < 10)
+                      return 'Nomor HP minimal 10 digit.';
                     return null;
                   },
                 ),
@@ -354,8 +380,8 @@ class _OwnerEditProfilePageState extends State<_OwnerEditProfilePage> {
                   text: 'Simpan Perubahan',
                   icon: Icons.save_rounded,
                   isFullWidth: true,
-                  isLoading: prov.isSubmitting,
-                  onPressed: prov.isSubmitting ? null : _save,
+                  isLoading: prov.isUpdatingProfile,
+                  onPressed: prov.isUpdatingProfile ? null : _save,
                 ),
                 const SizedBox(height: 12),
                 AppButton(

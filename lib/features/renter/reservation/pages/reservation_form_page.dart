@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/router/app_router.dart';
@@ -8,7 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../data/models/kost_model.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../../data/repositories/reservation_repository.dart';
 
 class ReservationFormPage extends StatefulWidget {
   final KostModel kost;
@@ -25,7 +26,6 @@ class ReservationFormPage extends StatefulWidget {
 }
 
 class _ReservationFormPageState extends State<ReservationFormPage> {
-  final _repo = MockRepository.instance;
   final _notesCtrl = TextEditingController();
   final _dateFmt = DateFormat('dd MMMM yyyy', 'id_ID');
   final _currFmt = NumberFormat.currency(
@@ -66,20 +66,24 @@ class _ReservationFormPageState extends State<ReservationFormPage> {
     if (_isSubmitting) return; // cegah double submit
     setState(() => _isSubmitting = true);
     try {
-      final reservation = await _repo.createReservation(
-        kostId: widget.kost.id,
-        isSplitBill: widget.isSplitBill,
-        splitMemberCount: widget.isSplitBill ? _memberCount : null,
-        checkInDate: _checkInDate,
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
+      final reservation = await context
+          .read<ReservationRepository>()
+          .createReservation(
+            kostId: widget.kost.id,
+            isSplitBill: widget.isSplitBill,
+            splitMemberCount: widget.isSplitBill ? _memberCount : null,
+            checkInDate: _checkInDate,
+            notes: _notesCtrl.text.trim().isEmpty
+                ? null
+                : _notesCtrl.text.trim(),
+          );
       if (!mounted) return;
       context.go(AppRoutes.reservationSuccess, extra: reservation);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(ReservationRepository.errorMessage(e)),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(

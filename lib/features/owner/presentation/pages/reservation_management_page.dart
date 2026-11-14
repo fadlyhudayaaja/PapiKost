@@ -6,6 +6,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
+import '../../../../core/widgets/empty_state.dart';
 import '../../../../data/models/reservation_model.dart';
 import '../providers/owner_provider.dart';
 
@@ -21,20 +22,39 @@ class ReservationManagementPage extends StatelessWidget {
       appBar: AppBar(title: const Text('Manajemen Reservasi')),
       body: RefreshIndicator(
         color: AppColors.primary,
-        onRefresh: () => provider.fetchDashboard(),
-        child: provider.isLoading
+        onRefresh: () => provider.fetchReservations(),
+        child: provider.reservationLoading
             ? ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: 4,
-                itemBuilder: (_, __) => const ListItemShimmer(),
+                itemBuilder: (_, _) => const ListItemShimmer(),
+              )
+            : provider.reservationError != null
+            ? ListView(
+                children: [
+                  ErrorState(
+                    message: provider.reservationError!,
+                    onRetry: provider.fetchReservations,
+                  ),
+                ],
               )
             : provider.reservations.isEmpty
-            ? const Center(child: Text('Belum ada reservasi'))
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Belum ada reservasi',
+                  ),
+                ],
+              )
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: provider.reservations.length,
                 itemBuilder: (context, i) => _ReservationCard(
                   reservation: provider.reservations[i],
+                  busy: provider.isSubmitting,
                   onApprove: (id) =>
                       _handleResponse(context, provider, id, true),
                   onReject: (id) =>
@@ -48,7 +68,7 @@ class ReservationManagementPage extends StatelessWidget {
   Future<void> _handleResponse(
     BuildContext context,
     OwnerProvider provider,
-    int id,
+    String id,
     bool approve,
   ) async {
     final success = await provider.respondToReservation(id, approve);
@@ -59,7 +79,7 @@ class ReservationManagementPage extends StatelessWidget {
         content: Text(
           success
               ? (approve ? 'Reservasi disetujui' : 'Reservasi ditolak')
-              : 'Gagal memproses reservasi',
+              : (provider.errorMessage ?? 'Gagal memproses reservasi'),
         ),
         backgroundColor: success
             ? (approve ? AppColors.success : AppColors.error)
@@ -73,11 +93,13 @@ class ReservationManagementPage extends StatelessWidget {
 
 class _ReservationCard extends StatelessWidget {
   final ReservationModel reservation;
-  final void Function(int) onApprove;
-  final void Function(int) onReject;
+  final void Function(String) onApprove;
+  final void Function(String) onReject;
+  final bool busy;
 
   const _ReservationCard({
     required this.reservation,
+    required this.busy,
     required this.onApprove,
     required this.onReject,
   });
@@ -228,7 +250,7 @@ class _ReservationCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => onReject(reservation.id),
+                      onPressed: busy ? null : () => onReject(reservation.id),
                       icon: const Icon(Icons.close_rounded, size: 18),
                       label: const Text('Tolak'),
                       style: OutlinedButton.styleFrom(
@@ -240,7 +262,7 @@ class _ReservationCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => onApprove(reservation.id),
+                      onPressed: busy ? null : () => onApprove(reservation.id),
                       icon: const Icon(Icons.check_rounded, size: 18),
                       label: const Text('Setujui'),
                       style: ElevatedButton.styleFrom(

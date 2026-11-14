@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -44,7 +44,7 @@ class KostListTile extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: kost.imageUrls.isNotEmpty
-                  ? CachedNetworkImage(
+                  ? UrlImage(
                       imageUrl: kost.imageUrls.first,
                       width: 80,
                       height: 80,

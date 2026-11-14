@@ -1,13 +1,14 @@
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserModel extends Equatable {
-  final int id;
+  final String id;
   final String name;
   final String email;
   final String phone;
   final String role; // RENTER | OWNER | ADMIN
   final String? avatarUrl;
-  final String? bio; // Preferensi / bio disimpan in-memory per sesi
+  final String? bio;
   final bool isVerified;
   final DateTime? createdAt;
 
@@ -25,7 +26,7 @@ class UserModel extends Equatable {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] as int,
+      id: json['id'].toString(),
       name: json['name'] as String,
       email: json['email'] as String,
       phone: json['phone'] as String? ?? '',
@@ -37,6 +38,20 @@ class UserModel extends Equatable {
           ? DateTime.tryParse(json['createdAt'] as String)
           : null,
     );
+  }
+
+  factory UserModel.fromFirestore(String id, Map<String, dynamic> data) {
+    final createdAt = data['createdAt'];
+    return UserModel.fromJson({
+      ...data,
+      'id': id,
+      'createdAt': switch (createdAt) {
+        Timestamp value => value.toDate().toIso8601String(),
+        DateTime value => value.toIso8601String(),
+        String value => value,
+        _ => null,
+      },
+    });
   }
 
   Map<String, dynamic> toJson() => {
@@ -52,7 +67,7 @@ class UserModel extends Equatable {
   };
 
   UserModel copyWith({
-    int? id,
+    String? id,
     String? name,
     String? email,
     String? phone,

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -8,7 +11,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../../data/models/kost_model.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../../data/repositories/kost_repository.dart';
 
 // ─── ViewState enum lokal ────────────────────────────────────────────────────
 enum _CatalogState { loading, empty, error, success }
@@ -21,19 +24,19 @@ class CatalogPage extends StatefulWidget {
 }
 
 class _CatalogPageState extends State<CatalogPage> {
-  final _repo = MockRepository.instance;
   final _searchCtrl = TextEditingController();
   final _fmt = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
     decimalDigits: 0,
   );
-
-  _CatalogState _state = _CatalogState.loading;
+  late final KostRepository _repo;
+  StreamSubscription<List<KostModel>>? _subscription;
+  List<KostModel> _allKost = [];
   List<KostModel> _kostList = [];
+  _CatalogState _state = _CatalogState.loading;
   String _error = '';
   String _filterType = 'ALL';
-  bool _simulateError = false;
 
   final List<Map<String, String>> _filters = const [
     {'value': 'ALL', 'label': 'Semua'},
@@ -45,36 +48,58 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void initState() {
     super.initState();
+    _repo = context.read<KostRepository>();
     _loadKost();
   }
 
   @override
   void dispose() {
+    _subscription?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
 
+  void _applyFilters() {
+    final search = _searchCtrl.text.trim().toLowerCase();
+    _kostList = _allKost.where((kost) {
+      return (search.isEmpty ||
+              [
+                kost.name,
+                kost.address,
+                kost.city,
+              ].any((value) => value.toLowerCase().contains(search))) &&
+          (_filterType == 'ALL' || kost.type == _filterType);
+    }).toList();
+    _state = _kostList.isEmpty ? _CatalogState.empty : _CatalogState.success;
+  }
+
   Future<void> _loadKost({String? search}) async {
+    if (_subscription != null && _state != _CatalogState.error) {
+      setState(_applyFilters);
+      return;
+    }
+    await _subscription?.cancel();
+    if (!mounted) return;
     setState(() {
       _state = _CatalogState.loading;
       _error = '';
     });
-    try {
-      final data = await _repo.getKostList(
-        search: search,
-        type: _filterType == 'ALL' ? null : _filterType,
-        simulateError: _simulateError,
-      );
-      setState(() {
-        _kostList = data;
-        _state = data.isEmpty ? _CatalogState.empty : _CatalogState.success;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _state = _CatalogState.error;
-      });
-    }
+    _subscription = _repo.watchAll().listen(
+      (data) {
+        if (!mounted) return;
+        setState(() {
+          _allKost = data;
+          _applyFilters();
+        });
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() {
+          _error = KostRepository.errorMessage(error);
+          _state = _CatalogState.error;
+        });
+      },
+    );
   }
 
   @override
@@ -130,31 +155,10 @@ class _CatalogPageState extends State<CatalogPage> {
                   ],
                 ),
               ),
-              // Toggle error simulation (demo)
-              GestureDetector(
-                onTap: () {
-                  setState(() => _simulateError = !_simulateError);
-                  _loadKost();
-                },
-                child: Tooltip(
-                  message: _simulateError ? 'Mode Error ON' : 'Mode Normal',
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _simulateError
-                          ? AppColors.error.withValues(alpha: 0.3)
-                          : AppColors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _simulateError
-                          ? Icons.bug_report_rounded
-                          : Icons.bug_report_outlined,
-                      color: AppColors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
+              IconButton(
+                onPressed: () => _loadKost(),
+                tooltip: 'Muat ulang',
+                icon: const Icon(Icons.refresh_rounded, color: AppColors.white),
               ),
             ],
           ),
@@ -351,7 +355,7 @@ class _KostCard extends StatelessWidget {
                     topRight: Radius.circular(16),
                   ),
                   child: kost.imageUrls.isNotEmpty
-                      ? CachedNetworkImage(
+                      ? UrlImage(
                           imageUrl: kost.imageUrls.first,
                           height: 180,
                           width: double.infinity,

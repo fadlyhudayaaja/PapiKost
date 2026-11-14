@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "121412823866",
+    "project_id": "papikost-913c2",
+    "storage_bucket": "papikost-913c2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:121412823866:android:dda627b1c134e6366c3e03",
+        "android_client_info": {
+          "package_name": "com.example.papikost"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgRTvuA1ZWuoeuVD2VdzM1z928n1T2ljg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

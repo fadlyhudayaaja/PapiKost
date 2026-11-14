@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
-/// Alur 3: Edit Profil — simpan state di sesi (in-memory)
+/// Edit profil akun yang tersimpan di Firestore.
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
 
@@ -16,7 +17,6 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  final _repo = MockRepository.instance;
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -33,12 +33,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _loadProfile() async {
     try {
-      final user = await _repo.getProfile();
+      final auth = context.read<AuthProvider>();
+      final user = auth.currentUser!;
       _nameCtrl.text = user.name;
       _phoneCtrl.text = user.phone;
       _bioCtrl.text = user.bio ?? '';
     } catch (_) {}
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -55,11 +56,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     setState(() => _isSubmitting = true);
     try {
-      await _repo.updateProfile(
+      final auth = context.read<AuthProvider>();
+      final success = await auth.updateProfile(
         name: _nameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
         bio: _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
       );
+      if (!success)
+        throw Exception(auth.errorMessage ?? 'Gagal menyimpan profil.');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

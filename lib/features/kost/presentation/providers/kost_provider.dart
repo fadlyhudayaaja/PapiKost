@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../../core/network/mock_service.dart';
+import '../../../../data/repositories/kost_repository.dart';
 import '../../../../data/models/kost_model.dart';
 
 enum KostLoadState { initial, loading, loaded, error }
 
 class KostProvider extends ChangeNotifier {
+  KostProvider({KostRepository? repository})
+    : _repository = repository ?? KostRepository.instance;
+  final KostRepository _repository;
   List<KostModel> _kostList = [];
   KostModel? _selectedKost;
   KostLoadState _state = KostLoadState.initial;
@@ -34,26 +37,26 @@ class KostProvider extends ChangeNotifier {
     _state = KostLoadState.loading;
     notifyListeners();
     try {
-      _kostList = await MockService.fetchKostList(
+      _kostList = await _repository.fetchAll(
         search: search,
         type: _filterType == 'ALL' ? null : _filterType,
       );
       _state = KostLoadState.loaded;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KostRepository.errorMessage(e);
       _state = KostLoadState.error;
     }
     notifyListeners();
   }
 
-  Future<void> fetchKostDetail(int id) async {
+  Future<void> fetchKostDetail(String id) async {
     _state = KostLoadState.loading;
     notifyListeners();
     try {
-      _selectedKost = await MockService.fetchKostById(id);
+      _selectedKost = await _repository.fetchById(id);
       _state = KostLoadState.loaded;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KostRepository.errorMessage(e);
       _state = KostLoadState.error;
     }
     notifyListeners();

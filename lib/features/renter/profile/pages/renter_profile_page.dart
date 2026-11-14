@@ -7,7 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../../data/models/user_model.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../../data/repositories/auth_repository.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
 
 enum _ProfileState { loading, error, success }
@@ -20,7 +20,6 @@ class RenterProfilePage extends StatefulWidget {
 }
 
 class _RenterProfilePageState extends State<RenterProfilePage> {
-  final _repo = MockRepository.instance;
   _ProfileState _state = _ProfileState.loading;
   UserModel? _user;
   String _error = '';
@@ -31,20 +30,24 @@ class _RenterProfilePageState extends State<RenterProfilePage> {
     _load();
   }
 
-  Future<void> _load({bool simulateError = false}) async {
+  Future<void> _load() async {
     setState(() {
       _state = _ProfileState.loading;
       _error = '';
     });
     try {
-      final user = await _repo.getProfile(simulateError: simulateError);
+      final auth = context.read<AuthProvider>();
+      await auth.refreshProfile();
+      final user = auth.currentUser!;
+      if (!mounted) return;
       setState(() {
         _user = user;
         _state = _ProfileState.success;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = AuthRepository.errorMessage(e);
         _state = _ProfileState.error;
       });
     }

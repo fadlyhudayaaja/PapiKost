@@ -24,6 +24,7 @@ class _OwnerVerificationPageState extends State<OwnerVerificationPage>
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<AdminProvider>().loadSubmissions();
     });
   }
@@ -41,12 +42,9 @@ class _OwnerVerificationPageState extends State<OwnerVerificationPage>
     return Scaffold(
       backgroundColor: AppColors.scaffold,
       appBar: AppBar(
-        title: const Text('Verifikasi Pemilik Kost'),
+        title: const Text('Verifikasi Pemilik & Kamar'),
         bottom: TabBar(
           controller: _tabCtrl,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.grey500,
           tabs: [
             Tab(
               child: Row(
@@ -103,6 +101,23 @@ class _OwnerVerificationPageState extends State<OwnerVerificationPage>
               itemBuilder: (_, __) => const Padding(
                 padding: EdgeInsets.only(bottom: 12),
                 child: ListItemShimmer(),
+              ),
+            )
+          : prov.state == AdminLoadState.error
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(prov.error, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: prov.loadSubmissions,
+                      child: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
               ),
             )
           : TabBarView(
@@ -222,7 +237,12 @@ class _SubmissionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(submission.name, style: AppTextStyles.labelLarge),
-                    Text(submission.email, style: AppTextStyles.bodySmall),
+                    Text(
+                      submission.isKostSubmission
+                          ? 'Pengajuan Kamar'
+                          : submission.email,
+                      style: AppTextStyles.bodySmall,
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -298,10 +318,7 @@ class _StatusBadge extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(color: fg),
-      ),
+      child: Text(label, style: AppTextStyles.labelSmall.copyWith(color: fg)),
     );
   }
 }
@@ -315,18 +332,18 @@ class _CountBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count == 0) return const SizedBox.shrink();
     return Container(
-      width: 18,
-      height: 18,
+      height: 20,
+      constraints: const BoxConstraints(minWidth: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(9),
+        color: color,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Center(
         child: Text(
           '$count',
-          style: TextStyle(
-            color: color,
-            fontSize: 10,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.black,
             fontWeight: FontWeight.w700,
           ),
         ),

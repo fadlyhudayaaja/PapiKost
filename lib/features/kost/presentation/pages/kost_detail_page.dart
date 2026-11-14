@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -15,7 +15,7 @@ import '../../../../data/models/kost_model.dart';
 import '../providers/kost_provider.dart';
 
 class KostDetailPage extends StatefulWidget {
-  final int kostId;
+  final String kostId;
   const KostDetailPage({super.key, required this.kostId});
 
   @override
@@ -118,7 +118,7 @@ class _KostDetailPageState extends State<KostDetailPage> {
                             ),
                           );
                         }
-                        return CachedNetworkImage(
+                        return UrlImage(
                           imageUrl: kost.imageUrls[index],
                           fit: BoxFit.cover,
                           placeholder: (_, __) => const ShimmerBox(height: 280),
@@ -331,7 +331,9 @@ class _KostDetailPageState extends State<KostDetailPage> {
                         children: [
                           CircleAvatar(
                             radius: 22,
-                            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                            backgroundColor: AppColors.primary.withValues(
+                              alpha: 0.1,
+                            ),
                             child: const Icon(
                               Icons.person_rounded,
                               color: AppColors.primary,

@@ -10,7 +10,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../../data/models/ticket_model.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../../data/repositories/ticket_repository.dart';
 import '../providers/renter_ticket_provider.dart';
 
 class RenterTicketListPage extends StatefulWidget {
@@ -25,7 +25,7 @@ class _RenterTicketListPageState extends State<RenterTicketListPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<RenterTicketProvider>().loadTickets();
+      if (mounted) context.read<RenterTicketProvider>().loadTickets();
     });
   }
 
@@ -148,10 +148,11 @@ class _RenterTicketListPageState extends State<RenterTicketListPage> {
     );
   }
 
-  Future<void> _executeDelete(int id) async {
+  Future<void> _executeDelete(String id) async {
     final prov = context.read<RenterTicketProvider>();
     try {
-      await prov.deleteTicket(id);
+      final success = await prov.deleteTicket(id);
+      if (!success) return;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -173,7 +174,7 @@ class _RenterTicketListPageState extends State<RenterTicketListPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(TicketRepository.errorMessage(e)),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -286,7 +287,7 @@ class _TicketCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   // Edit hanya jika belum selesai
-                  if (ticket.status != AppConstants.ticketStatusDone)
+                  if (ticket.status == AppConstants.ticketStatusPending)
                     IconButton(
                       icon: const Icon(
                         Icons.edit_outlined,
@@ -325,7 +326,7 @@ class _TicketCard extends StatelessWidget {
   }
 
   String get _categoryLabel =>
-      MockRepository.categoryLabels[ticket.category] ?? ticket.category;
+      TicketRepository.categoryLabels[ticket.category] ?? ticket.category;
 
   Color get _categoryColor {
     switch (ticket.category) {

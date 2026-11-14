@@ -1,10 +1,7 @@
-import 'dart:io';
-
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +11,8 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
+import '../../../../data/repositories/auth_repository.dart';
+import '../../../../core/utils/image_url.dart';
 import '../providers/owner_provider.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -82,6 +81,9 @@ class _KostManagementPageState extends State<KostManagementPage> {
       );
     }
 
+    if (prov.kostError != null) {
+      return ErrorState(message: prov.kostError!, onRetry: prov.fetchKostList);
+    }
     if (prov.kostList.isEmpty) {
       return EmptyState(
         icon: Icons.home_outlined,
@@ -109,9 +111,7 @@ class _KostManagementPageState extends State<KostManagementPage> {
   void _navigateToForm(BuildContext context, OwnerKostModel? existing) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => KostFormPage(existingKost: existing),
-      ),
+      MaterialPageRoute(builder: (_) => KostFormPage(existingKost: existing)),
     );
   }
 
@@ -148,12 +148,19 @@ class _KostManagementPageState extends State<KostManagementPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(dCtx);
-              await context.read<OwnerProvider>().deleteKost(kost.id);
+              final provider = context.read<OwnerProvider>();
+              final success = await provider.deleteKost(kost.id);
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text('Kamar berhasil dihapus'),
-                  backgroundColor: AppColors.success,
+                  content: Text(
+                    success
+                        ? 'Kamar berhasil dihapus'
+                        : (provider.errorMessage ?? 'Gagal menghapus kamar.'),
+                  ),
+                  backgroundColor: success
+                      ? AppColors.success
+                      : AppColors.error,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -161,9 +168,7 @@ class _KostManagementPageState extends State<KostManagementPage> {
                 ),
               );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Hapus'),
           ),
         ],
@@ -254,8 +259,10 @@ class _KostCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(fmt.format(kost.pricePerMonth),
-                        style: AppTextStyles.price),
+                    Text(
+                      fmt.format(kost.pricePerMonth),
+                      style: AppTextStyles.price,
+                    ),
                     Text('/bulan', style: AppTextStyles.caption),
                     const Spacer(),
                     Container(
@@ -280,6 +287,13 @@ class _KostCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                Text(switch (kost.verificationStatus) {
+                  'ACC' => 'Disetujui admin',
+                  'TOLAK' =>
+                    'Ditolak admin: ${kost.rejectionReason ?? "Periksa data kamar."}',
+                  _ => 'Menunggu verifikasi admin',
+                }, style: AppTextStyles.bodySmall),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -334,7 +348,7 @@ class _KostCard extends StatelessWidget {
 
     final isNetwork = kost.photoUrl!.startsWith('http');
     if (isNetwork) {
-      return CachedNetworkImage(
+      return UrlImage(
         imageUrl: kost.photoUrl!,
         height: 140,
         width: double.infinity,
@@ -349,17 +363,11 @@ class _KostCard extends StatelessWidget {
         ),
       );
     } else {
-      return Image.file(
-        File(kost.photoUrl!),
+      return Container(
         height: 140,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          height: 140,
-          color: AppColors.grey100,
-          child: const Center(
-            child: Icon(Icons.broken_image_outlined, color: AppColors.grey400),
-          ),
+        color: AppColors.grey100,
+        child: const Center(
+          child: Icon(Icons.broken_image_outlined, color: AppColors.grey400),
         ),
       );
     }
@@ -405,6 +413,7 @@ class _KostFormPageState extends State<KostFormPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _addressCtrl;
+  late final TextEditingController _cityCtrl;
   late final TextEditingController _priceCtrl;
   late final TextEditingController _totalRoomsCtrl;
   late final TextEditingController _descCtrl;
@@ -412,8 +421,10 @@ class _KostFormPageState extends State<KostFormPage> {
   String _selectedType = 'CAMPUR';
   bool _isSplitBill = false;
   final List<String> _selectedFacilities = [];
-  String? _photoPath; // path lokal atau URL
-  final ImagePicker _picker = ImagePicker();
+  late final TextEditingController _photoCtrl;
+  bool _saving = false;
+  String? _photoError;
+  bool get _busy => _saving;
 
   bool get _isEdit => widget.existingKost != null;
 
@@ -440,6 +451,7 @@ class _KostFormPageState extends State<KostFormPage> {
     final k = widget.existingKost;
     _nameCtrl = TextEditingController(text: k?.name ?? '');
     _addressCtrl = TextEditingController(text: k?.address ?? '');
+    _cityCtrl = TextEditingController(text: k?.city ?? 'Medan');
     _priceCtrl = TextEditingController(
       text: k != null ? k.pricePerMonth.toInt().toString() : '',
     );
@@ -447,12 +459,12 @@ class _KostFormPageState extends State<KostFormPage> {
       text: k != null ? k.totalRooms.toString() : '',
     );
     _descCtrl = TextEditingController(text: k?.description ?? '');
+    _photoCtrl = TextEditingController(text: k?.photoUrl ?? '');
 
     if (k != null) {
       _selectedType = k.type;
       _isSplitBill = k.isSplitBillAvailable;
       _selectedFacilities.addAll(k.facilities);
-      _photoPath = k.photoUrl;
     }
   }
 
@@ -460,539 +472,421 @@ class _KostFormPageState extends State<KostFormPage> {
   void dispose() {
     _nameCtrl.dispose();
     _addressCtrl.dispose();
+    _cityCtrl.dispose();
     _priceCtrl.dispose();
     _totalRoomsCtrl.dispose();
     _descCtrl.dispose();
+    _photoCtrl.dispose();
     super.dispose();
   }
 
-  // ── Pilih foto dari galeri / kamera ────────────────────────────────────────
-  void _showPhotoPicker() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.grey300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text('Pilih Foto Kamar', style: AppTextStyles.h4),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PhotoSourceBtn(
-                      icon: Icons.camera_alt_rounded,
-                      label: 'Kamera',
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _pickImage(ImageSource.camera);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _PhotoSourceBtn(
-                      icon: Icons.photo_library_rounded,
-                      label: 'Galeri',
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _pickImage(ImageSource.gallery);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              if (_photoPath != null) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    setState(() => _photoPath = null);
-                  },
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Hapus Foto'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final picked = await _picker.pickImage(
-        source: source,
-        imageQuality: 75,
-        maxWidth: 1280,
-      );
-      if (picked != null) setState(() => _photoPath = picked.path);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal memilih foto.')),
-        );
-      }
-    }
-  }
-
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    final prov = context.read<OwnerProvider>();
+    if (_busy || prov.isSubmitting || !_formKey.currentState!.validate()) {
+      return;
+    }
     if (_selectedFacilities.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Pilih minimal satu fasilitas'),
+        const SnackBar(
+          content: Text('Pilih minimal satu fasilitas'),
           backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
         ),
       );
       return;
     }
-
-    final prov = context.read<OwnerProvider>();
-    if (prov.isSubmitting) return;
-
-    final price = double.tryParse(
+    final price =
+        double.tryParse(
           _priceCtrl.text.replaceAll('.', '').replaceAll(',', ''),
         ) ??
         0;
     final rooms = int.tryParse(_totalRoomsCtrl.text) ?? 0;
-
-    bool success;
-    if (_isEdit) {
-      success = await prov.updateKost(
-        id: widget.existingKost!.id,
-        name: _nameCtrl.text.trim(),
-        address: _addressCtrl.text.trim(),
-        pricePerMonth: price,
-        type: _selectedType,
-        totalRooms: rooms,
-        isSplitBillAvailable: _isSplitBill,
-        facilities: List.from(_selectedFacilities),
-        description: _descCtrl.text.trim().isEmpty
-            ? null
-            : _descCtrl.text.trim(),
-        photoUrl: _photoPath,
-      );
-    } else {
-      success = await prov.addKost(
-        name: _nameCtrl.text.trim(),
-        address: _addressCtrl.text.trim(),
-        pricePerMonth: price,
-        type: _selectedType,
-        totalRooms: rooms,
-        isSplitBillAvailable: _isSplitBill,
-        facilities: List.from(_selectedFacilities),
-        description: _descCtrl.text.trim().isEmpty
-            ? null
-            : _descCtrl.text.trim(),
-        photoUrl: _photoPath,
-      );
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? (_isEdit ? 'Kamar berhasil diperbarui!' : 'Kamar berhasil ditambahkan!')
-              : 'Gagal menyimpan data kamar.',
+    setState(() {
+      _saving = true;
+      _photoError = null;
+    });
+    try {
+      final bool success;
+      if (_isEdit) {
+        success = await prov.updateKost(
+          id: widget.existingKost!.id,
+          name: _nameCtrl.text.trim(),
+          address: _addressCtrl.text.trim(),
+          city: _cityCtrl.text.trim(),
+          pricePerMonth: price,
+          type: _selectedType,
+          totalRooms: rooms,
+          isSplitBillAvailable: _isSplitBill,
+          facilities: List.from(_selectedFacilities),
+          description: _descCtrl.text.trim().isEmpty
+              ? null
+              : _descCtrl.text.trim(),
+          photoUrl: ImageUrl.normalizeInput(_photoCtrl.text).isEmpty
+              ? null
+              : ImageUrl.normalizeInput(_photoCtrl.text),
+        );
+      } else {
+        success = await prov.addKost(
+          name: _nameCtrl.text.trim(),
+          address: _addressCtrl.text.trim(),
+          city: _cityCtrl.text.trim(),
+          pricePerMonth: price,
+          type: _selectedType,
+          totalRooms: rooms,
+          isSplitBillAvailable: _isSplitBill,
+          facilities: List.from(_selectedFacilities),
+          description: _descCtrl.text.trim().isEmpty
+              ? null
+              : _descCtrl.text.trim(),
+          photoUrl: ImageUrl.normalizeInput(_photoCtrl.text).isEmpty
+              ? null
+              : ImageUrl.normalizeInput(_photoCtrl.text),
+        );
+      }
+      if (!mounted) return;
+      if (!success) {
+        setState(() {
+          _photoError = prov.errorMessage ?? 'Gagal menyimpan data kamar.';
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? (_isEdit
+                      ? 'Kamar diperbarui dan dikirim untuk verifikasi admin.'
+                      : 'Kamar ditambahkan dan menunggu verifikasi admin.')
+                : (_photoError ?? 'Gagal menyimpan data kamar.'),
+          ),
+          backgroundColor: success ? AppColors.success : AppColors.error,
         ),
-        backgroundColor: success ? AppColors.success : AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-    if (success) Navigator.pop(context);
+      );
+      if (success) Navigator.pop(context);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _photoError = AuthRepository.errorMessage(error);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<OwnerProvider>();
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      appBar: AppBar(
-        title: Text(_isEdit ? 'Edit Kamar' : 'Tambah Kamar'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: !_saving && !prov.isSubmitting,
+      child: Scaffold(
+        backgroundColor: AppColors.scaffold,
+        appBar: AppBar(
+          title: Text(_isEdit ? 'Edit Kamar' : 'Tambah Kamar'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_rounded),
+            onPressed: _saving || prov.isSubmitting
+                ? null
+                : () => Navigator.pop(context),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ══ FOTO KAMAR ══════════════════════════════════════════════
-                Text('Foto Kamar', style: AppTextStyles.h4),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: _showPhotoPicker,
-                  child: Container(
-                    width: double.infinity,
-                    height: 160,
-                    decoration: BoxDecoration(
-                      color: AppColors.inputBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.grey300,
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    child: _buildPhotoPreview(),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Ketuk untuk pilih foto kamar (opsional)',
-                  style: AppTextStyles.caption,
-                ),
-                const SizedBox(height: 20),
-
-                // ══ NAMA KOST ══════════════════════════════════════════════
-                AppTextField(
-                  controller: _nameCtrl,
-                  label: 'Nama Kost *',
-                  hint: 'Contoh: Kost Mawar Indah',
-                  prefixIcon: Icons.home_rounded,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
-                ),
-                const SizedBox(height: 14),
-
-                // ══ ALAMAT ══════════════════════════════════════════════════
-                AppTextField(
-                  controller: _addressCtrl,
-                  label: 'Alamat Lengkap *',
-                  hint: 'Jl. Dr. Mansyur No. 12, Medan',
-                  prefixIcon: Icons.location_on_outlined,
-                  maxLines: 2,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
-                ),
-                const SizedBox(height: 14),
-
-                // ══ HARGA & KAMAR ══════════════════════════════════════════
-                Row(
+        body: SafeArea(
+          child: AbsorbPointer(
+            absorbing: _busy || prov.isSubmitting,
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      flex: 3,
-                      child: AppTextField(
-                        controller: _priceCtrl,
-                        label: 'Harga/Bulan (Rp) *',
-                        hint: '1200000',
-                        prefixIcon: Icons.payments_outlined,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Wajib diisi';
-                          }
-                          if (double.tryParse(v) == null) {
-                            return 'Angka tidak valid';
-                          }
-                          return null;
-                        },
-                      ),
+                    // ══ FOTO KAMAR ══════════════════════════════════════════════
+                    Text('Foto Kamar', style: AppTextStyles.h4),
+                    const SizedBox(height: 8),
+                    AppTextField(
+                      key: const Key('kost-photo-url'),
+                      controller: _photoCtrl,
+                      label: 'URL Foto Kamar (Opsional)',
+                      hint: 'https://contoh.com/foto-kamar.jpg',
+                      prefixIcon: Icons.link,
+                      keyboardType: TextInputType.url,
+                      validator: (value) =>
+                          ImageUrl.validate(value, required: false),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: AppTextField(
-                        controller: _totalRoomsCtrl,
-                        label: 'Total Kamar *',
-                        hint: '10',
-                        prefixIcon: Icons.door_front_door_outlined,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
-                      ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tempel URL gambar, link berbagi Google Gambar (share.google), atau link file Google Drive. Pastikan foto bisa dibuka tanpa login.',
+                      style: AppTextStyles.caption,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                    if (_photoCtrl.text.trim().isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 160,
+                        child: _buildPhotoPreview(),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
 
-                // ══ TIPE KOST ══════════════════════════════════════════════
-                Text('Tipe Kost *', style: AppTextStyles.h4),
-                const SizedBox(height: 10),
-                Row(
-                  children: _types.map((t) {
-                    final sel = _selectedType == t;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedType = t),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          margin: EdgeInsets.only(
-                            right: t != _types.last ? 8 : 0,
+                    AppTextField(
+                      controller: _cityCtrl,
+                      label: 'Kota *',
+                      hint: 'Contoh: Medan',
+                      prefixIcon: Icons.location_city_rounded,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Kota wajib diisi'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ══ NAMA KOST ══════════════════════════════════════════════
+                    AppTextField(
+                      controller: _nameCtrl,
+                      label: 'Nama Kost *',
+                      hint: 'Contoh: Kost Mawar Indah',
+                      prefixIcon: Icons.home_rounded,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ══ ALAMAT ══════════════════════════════════════════════════
+                    AppTextField(
+                      controller: _addressCtrl,
+                      label: 'Alamat Lengkap *',
+                      hint: 'Jl. Dr. Mansyur No. 12, Medan',
+                      prefixIcon: Icons.location_on_outlined,
+                      maxLines: 2,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Wajib diisi' : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ══ HARGA & KAMAR ══════════════════════════════════════════
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: AppTextField(
+                            controller: _priceCtrl,
+                            label: 'Harga/Bulan (Rp) *',
+                            hint: '1200000',
+                            prefixIcon: Icons.payments_outlined,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Wajib diisi';
+                              }
+                              if (double.tryParse(v) == null) {
+                                return 'Angka tidak valid';
+                              }
+                              return null;
+                            },
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: sel ? AppColors.primary : AppColors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color:
-                                  sel ? AppColors.primary : AppColors.grey300,
-                            ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: AppTextField(
+                            controller: _totalRoomsCtrl,
+                            label: 'Total Kamar *',
+                            hint: '10',
+                            prefixIcon: Icons.door_front_door_outlined,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            validator: (v) => v == null || v.trim().isEmpty
+                                ? 'Wajib diisi'
+                                : null,
                           ),
-                          child: Center(
-                            child: Text(
-                              t,
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color:
-                                    sel ? AppColors.white : AppColors.grey700,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ══ TIPE KOST ══════════════════════════════════════════════
+                    Text('Tipe Kost *', style: AppTextStyles.h4),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: _types.map((t) {
+                        final sel = _selectedType == t;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedType = t),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              margin: EdgeInsets.only(
+                                right: t != _types.last ? 8 : 0,
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: sel
+                                    ? AppColors.primary
+                                    : AppColors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: sel
+                                      ? AppColors.primary
+                                      : AppColors.grey300,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  t,
+                                  style: AppTextStyles.labelMedium.copyWith(
+                                    color: sel
+                                        ? AppColors.white
+                                        : AppColors.grey700,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
 
-                // ══ SPLIT BILL ════════════════════════════════════════════
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.grey200),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.people_rounded,
-                          color: AppColors.secondary,
-                          size: 20,
-                        ),
+                    // ══ SPLIT BILL ════════════════════════════════════════════
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Aktifkan Sewa Patungan',
-                              style: AppTextStyles.labelLarge,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.grey200),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            Text(
-                              'Izinkan penyewa berbagi biaya',
-                              style: AppTextStyles.bodySmall,
+                            child: const Icon(
+                              Icons.people_rounded,
+                              color: AppColors.secondary,
+                              size: 20,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Aktifkan Sewa Patungan',
+                                  style: AppTextStyles.labelLarge,
+                                ),
+                                Text(
+                                  'Izinkan penyewa berbagi biaya',
+                                  style: AppTextStyles.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _isSplitBill,
+                            onChanged: (v) => setState(() => _isSplitBill = v),
+                            activeThumbColor: AppColors.secondary,
+                          ),
+                        ],
                       ),
-                      Switch(
-                        value: _isSplitBill,
-                        onChanged: (v) => setState(() => _isSplitBill = v),
-                        activeThumbColor: AppColors.secondary,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ══ FASILITAS ════════════════════════════════════════════
+                    Text('Fasilitas *', style: AppTextStyles.h4),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pilih minimal satu fasilitas',
+                      style: AppTextStyles.caption,
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _allFacilities.map((f) {
+                        final sel = _selectedFacilities.contains(f);
+                        return FilterChip(
+                          label: Text(f),
+                          selected: sel,
+                          onSelected: (v) {
+                            setState(() {
+                              if (v) {
+                                _selectedFacilities.add(f);
+                              } else {
+                                _selectedFacilities.remove(f);
+                              }
+                            });
+                          },
+                          selectedColor: AppColors.primary,
+                          backgroundColor: AppColors.white,
+                          checkmarkColor: AppColors.white,
+                          side: BorderSide(
+                            color: sel ? AppColors.primary : AppColors.grey300,
+                          ),
+                          labelStyle: AppTextStyles.labelMedium.copyWith(
+                            color: sel ? AppColors.white : AppColors.grey700,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ══ DESKRIPSI ════════════════════════════════════════════
+                    AppTextField(
+                      controller: _descCtrl,
+                      label: 'Deskripsi Kost (Opsional)',
+                      hint: 'Ceritakan kost Anda...',
+                      prefixIcon: Icons.description_outlined,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 32),
+
+                    if (_photoError != null) ...[
+                      Text(
+                        _photoError!,
+                        style: const TextStyle(color: AppColors.error),
                       ),
+                      const SizedBox(height: 12),
                     ],
-                  ),
+                    AppButton(
+                      text: _isEdit ? 'Simpan Perubahan' : 'Tambah Kamar',
+                      icon: _isEdit ? Icons.save_rounded : Icons.add_rounded,
+                      isFullWidth: true,
+                      isLoading: _saving || prov.isSubmitting,
+                      onPressed: _busy || prov.isSubmitting ? null : _submit,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-
-                // ══ FASILITAS ════════════════════════════════════════════
-                Text('Fasilitas *', style: AppTextStyles.h4),
-                const SizedBox(height: 4),
-                Text(
-                  'Pilih minimal satu fasilitas',
-                  style: AppTextStyles.caption,
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _allFacilities.map((f) {
-                    final sel = _selectedFacilities.contains(f);
-                    return FilterChip(
-                      label: Text(f),
-                      selected: sel,
-                      onSelected: (v) {
-                        setState(() {
-                          if (v) {
-                            _selectedFacilities.add(f);
-                          } else {
-                            _selectedFacilities.remove(f);
-                          }
-                        });
-                      },
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.white,
-                      checkmarkColor: AppColors.white,
-                      side: BorderSide(
-                        color: sel ? AppColors.primary : AppColors.grey300,
-                      ),
-                      labelStyle: AppTextStyles.labelMedium.copyWith(
-                        color: sel ? AppColors.white : AppColors.grey700,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
-
-                // ══ DESKRIPSI ════════════════════════════════════════════
-                AppTextField(
-                  controller: _descCtrl,
-                  label: 'Deskripsi Kost (Opsional)',
-                  hint: 'Ceritakan kost Anda...',
-                  prefixIcon: Icons.description_outlined,
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 32),
-
-                AppButton(
-                  text: _isEdit ? 'Simpan Perubahan' : 'Tambah Kamar',
-                  icon: _isEdit ? Icons.save_rounded : Icons.add_rounded,
-                  isFullWidth: true,
-                  isLoading: prov.isSubmitting,
-                  onPressed: prov.isSubmitting ? null : _submit,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPhotoPreview() {
-    if (_photoPath == null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.add_photo_alternate_outlined,
-            size: 40,
-            color: AppColors.primary,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Pilih Foto Kamar',
-            style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      );
-    }
-
-    final isNetwork = _photoPath!.startsWith('http');
-    Widget img;
-
-    if (isNetwork) {
-      img = CachedNetworkImage(
-        imageUrl: _photoPath!,
-        width: double.infinity,
-        height: 160,
-        fit: BoxFit.cover,
-      );
-    } else {
-      img = Image.file(
-        File(_photoPath!),
-        width: double.infinity,
-        height: 160,
-        fit: BoxFit.cover,
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          img,
-          Positioned(
-            bottom: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.edit_rounded,
-                color: Colors.white,
-                size: 16,
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PhotoSourceBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _PhotoSourceBtn({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: AppColors.inputBg,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 36, color: AppColors.primary),
-            const SizedBox(height: 8),
-            Text(label, style: AppTextStyles.labelMedium),
-          ],
         ),
       ),
     );
   }
+
+  Widget _buildPhotoPreview() => ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: UrlImage(
+      imageUrl: _photoCtrl.text,
+      width: double.infinity,
+      height: 160,
+      fit: BoxFit.cover,
+    ),
+  );
 }

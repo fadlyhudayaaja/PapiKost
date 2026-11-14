@@ -28,56 +28,51 @@ class AdminDashboardPage extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                shape: BoxShape.circle,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.admin_panel_settings_rounded,
+                  size: 64,
+                  color: AppColors.white,
+                ),
               ),
-              child: const Icon(
-                Icons.admin_panel_settings_rounded,
-                size: 64,
-                color: AppColors.white,
+              const SizedBox(height: 20),
+              Text('Dashboard Admin', style: AppTextStyles.h2),
+              const SizedBox(height: 8),
+              Text(
+                'Kelola verifikasi pemilik dan kamar kost',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.grey500,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text('Dashboard Admin', style: AppTextStyles.h2),
-            const SizedBox(height: 8),
-            Text(
-              'Kelola verifikasi akun pemilik kost',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.grey500,
+              const SizedBox(height: 32),
+              _AdminMenuCard(
+                icon: Icons.verified_user_rounded,
+                title: 'Verifikasi Pemilik & Kamar',
+                subtitle: 'Periksa pengajuan pemilik dan kamar baru',
+                color: AppColors.primary,
+                onTap: () => context.push(AppRoutes.adminVerifyOwners),
               ),
-            ),
-            const SizedBox(height: 32),
-            _AdminMenuCard(
-              icon: Icons.verified_user_rounded,
-              title: 'Verifikasi Pemilik Kost',
-              subtitle: 'Review dan setujui akun pemilik baru',
-              color: AppColors.primary,
-              onTap: () => context.push(AppRoutes.adminVerifyOwners),
-            ),
-            const SizedBox(height: 12),
-            _AdminMenuCard(
-              icon: Icons.badge_rounded,
-              title: 'Verifikasi Berkas Penyewa',
-              subtitle: 'Periksa KTP dan dokumen penyewa',
-              color: const Color(0xFF7B1FA2),
-              onTap: () => context.push(AppRoutes.adminVerifyRenters),
-            ),
-            const SizedBox(height: 12),
-            _AdminMenuCard(
-              icon: Icons.people_rounded,
-              title: 'Manajemen Pengguna',
-              subtitle: 'Lihat semua pengguna terdaftar',
-              color: AppColors.secondary,
-              onTap: () => context.push(AppRoutes.adminUserManagement),
-            ),
-          ],
+              const SizedBox(height: 12),
+              _AdminMenuCard(
+                icon: Icons.people_rounded,
+                title: 'Manajemen Pengguna',
+                subtitle: 'Lihat semua pengguna terdaftar',
+                color: AppColors.secondary,
+                onTap: () => context.push(AppRoutes.adminUsers),
+              ),
+            ],
+          ),
         ),
       ),
     );

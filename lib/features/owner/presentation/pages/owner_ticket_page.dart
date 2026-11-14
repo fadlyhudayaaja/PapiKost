@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +27,7 @@ class _OwnerTicketPageState extends State<OwnerTicketPage>
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<OwnerProvider>().fetchDashboard();
+      if (mounted) context.read<OwnerProvider>().fetchTickets();
     });
   }
 
@@ -58,9 +58,6 @@ class _OwnerTicketPageState extends State<OwnerTicketPage>
         automaticallyImplyLeading: false,
         bottom: TabBar(
           controller: _tabCtrl,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.grey500,
           tabs: [
             Tab(
               child: Row(
@@ -68,7 +65,8 @@ class _OwnerTicketPageState extends State<OwnerTicketPage>
                 children: [
                   const Text('Menunggu'),
                   const SizedBox(width: 4),
-                  if (pending.isNotEmpty) _CountBadge(pending.length, AppColors.warning),
+                  if (pending.isNotEmpty)
+                    _CountBadge(pending.length, AppColors.warning),
                 ],
               ),
             ),
@@ -87,7 +85,7 @@ class _OwnerTicketPageState extends State<OwnerTicketPage>
           ],
         ),
       ),
-      body: provider.isLoading
+      body: provider.ticketLoading
           ? ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: 4,
@@ -95,6 +93,11 @@ class _OwnerTicketPageState extends State<OwnerTicketPage>
                 padding: EdgeInsets.only(bottom: 12),
                 child: ListItemShimmer(),
               ),
+            )
+          : provider.ticketError != null
+          ? ErrorState(
+              message: provider.ticketError!,
+              onRetry: provider.fetchTickets,
             )
           : TabBarView(
               controller: _tabCtrl,
@@ -117,21 +120,24 @@ class _TicketList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tickets.isEmpty) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.build_outlined,
         title: 'Tidak Ada Tiket',
         subtitle: 'Tidak ada tiket kerusakan pada kategori ini.',
+        buttonLabel: 'Muat Ulang',
+        onButtonTap: provider.fetchTickets,
       );
     }
 
     return RefreshIndicator(
       color: AppColors.primary,
-      onRefresh: () => provider.fetchDashboard(),
+      onRefresh: () => provider.fetchTickets(),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: tickets.length,
         itemBuilder: (context, i) => _OwnerTicketCard(
           ticket: tickets[i],
+          busy: provider.isSubmitting,
           onStatusChange: (id, status) =>
               _changeStatus(context, provider, id, status),
         ),
@@ -142,15 +148,54 @@ class _TicketList extends StatelessWidget {
   Future<void> _changeStatus(
     BuildContext context,
     OwnerProvider provider,
-    int ticketId,
+    String ticketId,
     String newStatus,
   ) async {
-    final success = await provider.updateTicketStatus(ticketId, newStatus);
+    if (provider.isSubmitting) return;
+    var note =
+        tickets.firstWhere((item) => item.id == ticketId).ownerNote ?? '';
+    final confirmedNote = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          newStatus == AppConstants.ticketStatusDone
+              ? 'Selesaikan Laporan'
+              : 'Proses Laporan',
+        ),
+        content: TextFormField(
+          initialValue: note,
+          maxLength: 2000,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Catatan untuk Penyewa (opsional)',
+          ),
+          onChanged: (value) => note = value,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, note),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmedNote == null || !context.mounted) return;
+    final success = await provider.updateTicketStatus(
+      ticketId,
+      newStatus,
+      ownerNote: confirmedNote,
+    );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          success ? 'Status tiket diperbarui' : 'Gagal update status',
+          success
+              ? 'Status tiket diperbarui'
+              : (provider.errorMessage ?? 'Gagal memperbarui status'),
         ),
         backgroundColor: success ? AppColors.success : AppColors.error,
         behavior: SnackBarBehavior.floating,
@@ -168,18 +213,18 @@ class _CountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 18,
-      height: 18,
+      height: 20,
+      constraints: const BoxConstraints(minWidth: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(9),
+        color: color,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Center(
         child: Text(
           '$count',
-          style: TextStyle(
-            color: color,
-            fontSize: 10,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.black,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -191,9 +236,14 @@ class _CountBadge extends StatelessWidget {
 // ── Ticket Card ──────────────────────────────────────────────────────────────
 class _OwnerTicketCard extends StatelessWidget {
   final TicketModel ticket;
-  final void Function(int, String) onStatusChange;
+  final void Function(String, String) onStatusChange;
+  final bool busy;
 
-  const _OwnerTicketCard({required this.ticket, required this.onStatusChange});
+  const _OwnerTicketCard({
+    required this.ticket,
+    required this.onStatusChange,
+    required this.busy,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -224,8 +274,9 @@ class _OwnerTicketCard extends StatelessWidget {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color:
-                        _getCategoryColor(ticket.category).withValues(alpha: 0.12),
+                    color: _getCategoryColor(
+                      ticket.category,
+                    ).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -278,7 +329,7 @@ class _OwnerTicketCard extends StatelessWidget {
                       onTap: () => _viewImage(context, ticket.imageUrls[i]),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: CachedNetworkImage(
+                        child: UrlImage(
                           imageUrl: ticket.imageUrls[i],
                           width: 90,
                           height: 90,
@@ -343,60 +394,80 @@ class _OwnerTicketCard extends StatelessWidget {
     };
 
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (sheetCtx) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.grey300,
-                      borderRadius: BorderRadius.circular(2),
+      onTap: busy || ticket.status == AppConstants.ticketStatusDone
+          ? null
+          : () {
+              showModalBottomSheet(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (sheetCtx) => SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.grey300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Text('Update Status Tiket', style: AppTextStyles.h4),
+                        const SizedBox(height: 16),
+                        ...statuses.map((s) {
+                          final isCurrent = ticket.status == s;
+                          final allowed =
+                              (ticket.status ==
+                                      AppConstants.ticketStatusPending &&
+                                  s == AppConstants.ticketStatusInProgress) ||
+                              (ticket.status ==
+                                      AppConstants.ticketStatusInProgress &&
+                                  s == AppConstants.ticketStatusDone);
+                          return ListTile(
+                            enabled: allowed || isCurrent,
+                            onTap: !allowed
+                                ? null
+                                : () {
+                                    Navigator.pop(sheetCtx);
+                                    if (!isCurrent) {
+                                      onStatusChange(ticket.id, s);
+                                    }
+                                  },
+                            leading: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: bgs[s],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                _getStatusIcon(s),
+                                color: colors[s],
+                                size: 18,
+                              ),
+                            ),
+                            title: Text(
+                              labels[s]!,
+                              style: AppTextStyles.labelLarge,
+                            ),
+                            trailing: isCurrent
+                                ? Icon(
+                                    Icons.check_circle_rounded,
+                                    color: colors[s],
+                                  )
+                                : null,
+                          );
+                        }),
+                      ],
                     ),
                   ),
-                  Text('Update Status Tiket', style: AppTextStyles.h4),
-                  const SizedBox(height: 16),
-                  ...statuses.map((s) {
-                    final isCurrent = ticket.status == s;
-                    return ListTile(
-                      onTap: () {
-                        Navigator.pop(sheetCtx);
-                        if (!isCurrent) onStatusChange(ticket.id, s);
-                      },
-                      leading: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: bgs[s],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          _getStatusIcon(s),
-                          color: colors[s],
-                          size: 18,
-                        ),
-                      ),
-                      title: Text(labels[s]!, style: AppTextStyles.labelLarge),
-                      trailing: isCurrent
-                          ? Icon(Icons.check_circle_rounded, color: colors[s])
-                          : null,
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+                ),
+              );
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -431,7 +502,7 @@ class _OwnerTicketCard extends StatelessWidget {
         backgroundColor: Colors.transparent,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+          child: UrlImage(imageUrl: url, fit: BoxFit.contain),
         ),
       ),
     );

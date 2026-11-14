@@ -1,20 +1,21 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../data/models/kost_model.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../../data/repositories/kost_repository.dart';
 
 enum _DetailState { loading, error, success }
 
 class RenterKostDetailPage extends StatefulWidget {
-  final int kostId;
+  final String kostId;
   const RenterKostDetailPage({super.key, required this.kostId});
 
   @override
@@ -22,7 +23,7 @@ class RenterKostDetailPage extends StatefulWidget {
 }
 
 class _RenterKostDetailPageState extends State<RenterKostDetailPage> {
-  final _repo = MockRepository.instance;
+  late final KostRepository _repo;
   final _pageCtrl = PageController();
   final _fmt = NumberFormat.currency(
     locale: 'id_ID',
@@ -37,6 +38,7 @@ class _RenterKostDetailPageState extends State<RenterKostDetailPage> {
   @override
   void initState() {
     super.initState();
+    _repo = context.read<KostRepository>();
     _load();
   }
 
@@ -46,23 +48,22 @@ class _RenterKostDetailPageState extends State<RenterKostDetailPage> {
     super.dispose();
   }
 
-  Future<void> _load({bool simulateError = false}) async {
+  Future<void> _load() async {
     setState(() {
       _state = _DetailState.loading;
       _error = '';
     });
     try {
-      final data = await _repo.getKostById(
-        widget.kostId,
-        simulateError: simulateError,
-      );
+      final data = await _repo.fetchById(widget.kostId);
+      if (!mounted) return;
       setState(() {
         _kost = data;
         _state = _DetailState.success;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = KostRepository.errorMessage(e);
         _state = _DetailState.error;
       });
     }
@@ -173,7 +174,7 @@ class _RenterKostDetailPageState extends State<RenterKostDetailPage> {
                             ),
                           );
                         }
-                        return CachedNetworkImage(
+                        return UrlImage(
                           imageUrl: kost.imageUrls[i],
                           fit: BoxFit.cover,
                           placeholder: (_, __) => const ShimmerBox(height: 280),

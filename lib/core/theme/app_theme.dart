@@ -35,6 +35,23 @@ class AppTheme {
         iconTheme: const IconThemeData(color: AppColors.white),
       ),
 
+      // Tabs sit on the navy AppBar and need contrasting text in every state.
+      tabBarTheme: TabBarThemeData(
+        labelColor: AppColors.white,
+        unselectedLabelColor: AppColors.grey200,
+        indicatorColor: AppColors.white,
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.white24,
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelStyle: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+
       // Card
       cardTheme: CardThemeData(
         color: AppColors.cardBg,

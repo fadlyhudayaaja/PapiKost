@@ -3,136 +3,101 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../data/models/reservation_model.dart';
+import '../../../../data/repositories/reservation_repository.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
-// ── Provider lokal untuk halaman ini ──────────────────────────
-class _ReservationHistoryProvider extends ChangeNotifier {
-  List<ReservationModel> _reservations = [];
-  bool _loading = false;
-  String? _error;
-
-  List<ReservationModel> get reservations => _reservations;
-  bool get loading => _loading;
-  String? get error => _error;
-
-  Future<void> fetch() async {
-    _loading = true;
-    notifyListeners();
-    try {
-      final resp = await DioClient.instance.get('/reservations/my');
-      final data = resp.data as List;
-      _reservations = data
-          .map((e) => ReservationModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      // Mock fallback
-      _reservations = _mockList;
-    }
-    _loading = false;
-    notifyListeners();
-  }
-
-  static final List<ReservationModel> _mockList = [
-    ReservationModel(
-      id: 1,
-      kostId: 1,
-      kostName: 'Kost Mawar Indah',
-      kostAddress: 'Jl. Dr. Mansyur No. 12',
-      renterId: 1,
-      renterName: 'Andi',
-      renterEmail: 'andi@mail.com',
-      renterPhone: '081234',
-      status: AppConstants.reservationStatusApproved,
-      isSplitBill: false,
-      totalPrice: 1200000,
-      checkInDate: DateTime.now().add(const Duration(days: 5)),
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
-    ),
-    ReservationModel(
-      id: 2,
-      kostId: 2,
-      kostName: 'Kost Bumi Putera',
-      kostAddress: 'Jl. Gagak Hitam No. 5',
-      renterId: 1,
-      renterName: 'Andi',
-      renterEmail: 'andi@mail.com',
-      renterPhone: '081234',
-      status: AppConstants.reservationStatusPending,
-      isSplitBill: true,
-      splitMemberCount: 2,
-      totalPrice: 900000,
-      pricePerPerson: 450000,
-      checkInDate: DateTime.now().add(const Duration(days: 14)),
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    ReservationModel(
-      id: 3,
-      kostId: 3,
-      kostName: 'Kost Harmoni Residence',
-      kostAddress: 'Jl. Jamin Ginting No. 88',
-      renterId: 1,
-      renterName: 'Andi',
-      renterEmail: 'andi@mail.com',
-      renterPhone: '081234',
-      status: AppConstants.reservationStatusRejected,
-      isSplitBill: false,
-      totalPrice: 1500000,
-      checkInDate: DateTime.now().subtract(const Duration(days: 3)),
-      createdAt: DateTime.now().subtract(const Duration(days: 10)),
-    ),
-  ];
-}
-
-// ── Page ──────────────────────────────────────────────────────
-class ReservationHistoryPage extends StatelessWidget {
+class ReservationHistoryPage extends StatefulWidget {
   const ReservationHistoryPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => _ReservationHistoryProvider()..fetch(),
-      child: const _ReservationHistoryView(),
-    );
-  }
+  State<ReservationHistoryPage> createState() => _ReservationHistoryPageState();
 }
 
-class _ReservationHistoryView extends StatelessWidget {
-  const _ReservationHistoryView();
+class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
+  String? _uid;
+  Stream<List<ReservationModel>>? _stream;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final uid = context.watch<AuthProvider>().currentUser?.id;
+    if (_uid != uid) {
+      _uid = uid;
+      _stream = uid == null
+          ? null
+          : context.read<ReservationRepository>().watchForRenter(uid);
+    }
+  }
+
+  Future<void> _refresh() async {
+    final uid = _uid;
+    if (uid == null) return;
+    setState(() {
+      _stream = context.read<ReservationRepository>().watchForRenter(uid);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final prov = context.watch<_ReservationHistoryProvider>();
-
     return Scaffold(
       backgroundColor: AppColors.scaffold,
       appBar: AppBar(title: const Text('Riwayat Reservasi')),
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: () => context.read<_ReservationHistoryProvider>().fetch(),
-        child: prov.loading
-            ? ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: 4,
-                itemBuilder: (_, __) => const ListItemShimmer(),
-              )
-            : prov.reservations.isEmpty
-            ? const EmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'Belum ada riwayat reservasi',
-                subtitle: 'Reservasi yang Anda buat akan muncul di sini',
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                itemCount: prov.reservations.length,
-                itemBuilder: (ctx, i) =>
-                    _ReservationCard(res: prov.reservations[i]),
-              ),
-      ),
+      body: _uid == null
+          ? const Center(child: Text('Silakan login untuk melihat reservasi.'))
+          : StreamBuilder<List<ReservationModel>>(
+              key: ValueKey(_uid),
+              stream: _stream,
+              builder: (context, snapshot) {
+                final items = snapshot.data ?? [];
+                return RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: _refresh,
+                  child: snapshot.hasError
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            ErrorState(
+                              message: ReservationRepository.errorMessage(
+                                snapshot.error!,
+                              ),
+                              onRetry: _refresh,
+                            ),
+                          ],
+                        )
+                      : snapshot.connectionState == ConnectionState.waiting &&
+                            !snapshot.hasData
+                      ? ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: 4,
+                          itemBuilder: (_, _) => const ListItemShimmer(),
+                        )
+                      : items.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            EmptyState(
+                              icon: Icons.receipt_long_outlined,
+                              title: 'Belum ada riwayat reservasi',
+                              subtitle:
+                                  'Reservasi yang Anda buat akan muncul di sini',
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                          itemCount: items.length,
+                          itemBuilder: (_, i) =>
+                              _ReservationCard(res: items[i]),
+                        ),
+                );
+              },
+            ),
     );
   }
 }

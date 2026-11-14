@@ -1,16 +1,68 @@
-# flutter_application_1
+# PapiKost
 
-A new Flutter project.
+Aplikasi Flutter untuk pencarian dan pengelolaan kost. Backend aktif memakai
+Firebase Auth dan Cloud Firestore. Konfigurasi Firebase saat ini tersedia untuk
+Android, dengan project `papikost-913c2`.
 
-## Getting Started
+## Menjalankan aplikasi Android
 
-This project is a starting point for a Flutter application.
+Siapkan Flutter dengan Dart minimal 3.10.7, Android Studio/Android SDK, serta
+emulator atau HP Android yang terhubung. Periksa lingkungan dengan
+`flutter doctor`.
 
-A few resources to get you started if this is your first Flutter project:
+```sh
+git clone https://github.com/fadlyhudayaaja/PapiKost.git
+cd PapiKost
+git switch main
+flutter pub get
+flutter devices
+flutter run
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Jika repository sudah ada di komputer:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```sh
+git switch main
+git pull --ff-only origin main
+flutter pub get
+flutter run
+```
+
+Jalankan perintah dari folder yang memiliki `pubspec.yaml` di root repository.
+`android/app/google-services.json` sudah disertakan. `android/local.properties`
+dan dependency dibuat di komputer masing-masing oleh Flutter/Android Studio.
+Gunakan koneksi internet untuk mengakses Firebase. Daftar akun melalui aplikasi;
+data pengguna dan kost mengikuti data project Firebase tersebut.
+
+## Fitur dan foto
+
+- Login, pendaftaran, sesi, dan profil pengguna.
+- Katalog, pengelolaan kost, serta verifikasi pemilik dan kamar oleh admin.
+- Reservasi, patungan, persetujuan pemilik, dan riwayat.
+- Laporan kerusakan penyewa dan pemrosesan oleh pemilik.
+- Daftar, pencarian, filter, dan detail pengguna untuk admin.
+
+Foto masih menggunakan URL HTTPS. Unggah langsung melalui Supabase belum
+diimplementasikan. PapiBot memiliki fallback rekomendasi; respons Gemini nyata
+memerlukan konfigurasi API tersendiri. Halaman demo verifikasi dokumen penyewa
+disimpan di [arsip UI](docs/legacy/renter-verification/README.md).
+
+## Validasi lokal
+
+```sh
+flutter analyze --no-pub --no-fatal-infos
+flutter test --no-pub
+```
+
+Tes aturan Firestore memakai Node.js, Java, dan emulator lokal:
+
+```sh
+cd firebase_tests
+npm ci
+npm run test:emulator
+```
+
+Tes tidak menerbitkan rules atau mengubah data Firebase produksi. Lihat
+[status backend](BACKEND_AUDIT.md), [panduan reservasi](FIREBASE_RESERVASI.md),
+[verifikasi](FIREBASE_VERIFIKASI_PEMILIK.md), [laporan](FIREBASE_LAPORAN.md), dan
+[foto](FIREBASE_UPLOAD_DOKUMEN.md) untuk pengaturan serta batas fitur.

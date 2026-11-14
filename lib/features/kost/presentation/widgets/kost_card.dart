@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -48,7 +48,7 @@ class KostCard extends StatelessWidget {
                     topRight: Radius.circular(16),
                   ),
                   child: kost.imageUrls.isNotEmpty
-                      ? CachedNetworkImage(
+                      ? UrlImage(
                           imageUrl: kost.imageUrls.first,
                           height: 180,
                           width: double.infinity,

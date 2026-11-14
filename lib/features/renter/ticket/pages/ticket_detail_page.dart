@@ -1,3 +1,4 @@
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -8,11 +9,11 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/shimmer_loading.dart';
-import '../../../../data/repositories/mock_repository.dart';
+import '../../../../data/repositories/ticket_repository.dart';
 import '../providers/renter_ticket_provider.dart';
 
 class TicketDetailPage extends StatefulWidget {
-  final int ticketId;
+  final String ticketId;
   const TicketDetailPage({super.key, required this.ticketId});
 
   @override
@@ -24,7 +25,9 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<RenterTicketProvider>().loadTicketDetail(widget.ticketId);
+      if (mounted) {
+        context.read<RenterTicketProvider>().loadTicketDetail(widget.ticketId);
+      }
     });
   }
 
@@ -89,7 +92,7 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
       case ViewState.success:
         final t = prov.selectedTicket!;
         final dateFmt = DateFormat('EEEE, dd MMMM yyyy', 'id_ID');
-        final isEditable = t.status != AppConstants.ticketStatusDone;
+        final isEditable = t.status == AppConstants.ticketStatusPending;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -105,7 +108,7 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                MockRepository.categoryLabels[t.category] ?? t.category,
+                TicketRepository.categoryLabels[t.category] ?? t.category,
                 style: AppTextStyles.bodySmall,
               ),
               const SizedBox(height: 20),
@@ -117,6 +120,12 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
                 label: 'Tanggal Laporan',
                 value: dateFmt.format(t.createdAt),
                 icon: Icons.calendar_today_outlined,
+              ),
+              const SizedBox(height: 12),
+              _InfoSection(
+                label: 'Tanggal Kejadian',
+                value: dateFmt.format(t.incidentDate),
+                icon: Icons.event_outlined,
               ),
               const SizedBox(height: 12),
               _InfoSection(
@@ -141,6 +150,30 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
                 ),
                 child: Text(t.description, style: AppTextStyles.bodyMedium),
               ),
+
+              if (t.imageUrls.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text('Foto Kerusakan', style: AppTextStyles.h4),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: t.imageUrls
+                      .map(
+                        (url) => SizedBox(
+                          width: 100,
+                          height: 100,
+                          child: UrlImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, _, _) =>
+                                const Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
 
               // Catatan owner
               if (t.ownerNote != null && t.ownerNote!.isNotEmpty) ...[

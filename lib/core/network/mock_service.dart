@@ -58,7 +58,7 @@ class MockService {
     }
 
     final user = UserModel(
-      id: _accounts.indexOf(account) + 1,
+      id: (_accounts.indexOf(account) + 1).toString(),
       name: account['name']!,
       email: account['email']!,
       phone: account['phone']!,
@@ -107,7 +107,7 @@ class MockService {
     return list;
   }
 
-  static Future<KostModel> fetchKostById(int id) async {
+  static Future<KostModel> fetchKostById(String id) async {
     await _delay(500);
     return _mockKostList.firstWhere(
       (k) => k.id == id,
@@ -122,7 +122,7 @@ class MockService {
   }
 
   static Future<void> createReservation({
-    required int kostId,
+    required String kostId,
     required bool isSplitBill,
     int? splitMemberCount,
     required DateTime checkInDate,
@@ -142,7 +142,7 @@ class MockService {
     required String title,
     required String description,
     required String category,
-    required int kostId,
+    required String kostId,
   }) async {
     await _delay(800);
     // Mock: selalu sukses
@@ -193,7 +193,7 @@ class MockService {
 
   static final List<KostModel> _mockKostList = [
     KostModel(
-      id: 1,
+      id: '1',
       name: 'Kost Mawar Indah',
       address: 'Jl. Dr. Mansyur No. 12, Medan',
       city: 'Medan',
@@ -217,7 +217,7 @@ class MockService {
       longitude: 98.6722,
     ),
     KostModel(
-      id: 2,
+      id: '2',
       name: 'Kost Bumi Putera',
       address: 'Jl. Gagak Hitam No. 5, Medan',
       city: 'Medan',
@@ -241,7 +241,7 @@ class MockService {
       longitude: 98.6764,
     ),
     KostModel(
-      id: 3,
+      id: '3',
       name: 'Kost Harmoni Residence',
       address: 'Jl. Jamin Ginting No. 88, Medan',
       city: 'Medan',
@@ -272,7 +272,7 @@ class MockService {
       longitude: 98.6901,
     ),
     KostModel(
-      id: 4,
+      id: '4',
       name: 'Kost Green House',
       address: 'Jl. Setia Budi No. 32, Medan',
       city: 'Medan',
@@ -295,7 +295,7 @@ class MockService {
       longitude: 98.6850,
     ),
     KostModel(
-      id: 5,
+      id: '5',
       name: 'Kost Putri Cantik',
       address: 'Jl. Perpustakaan No. 7, USU, Medan',
       city: 'Medan',
@@ -320,12 +320,12 @@ class MockService {
   ];
 
   static final List<ReservationModel> _mockReservations = [
-    ReservationModel(
-      id: 1,
-      kostId: 1,
+ReservationModel(
+      id: '1',
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       kostAddress: 'Jl. Dr. Mansyur No. 12',
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
       renterEmail: 'renter@papikost.com',
       renterPhone: '081234567890',
@@ -335,12 +335,12 @@ class MockService {
       checkInDate: DateTime.now().add(const Duration(days: 5)),
       createdAt: DateTime.now().subtract(const Duration(days: 2)),
     ),
-    ReservationModel(
-      id: 2,
-      kostId: 2,
+ReservationModel(
+      id: '2',
+      kostId: '2',
       kostName: 'Kost Bumi Putera',
       kostAddress: 'Jl. Gagak Hitam No. 5',
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
       renterEmail: 'renter@papikost.com',
       renterPhone: '081234567890',
@@ -356,42 +356,42 @@ class MockService {
 
   static final List<TicketModel> _mockTickets = [
     TicketModel(
-      id: 1,
+      id: '1',
       title: 'Lampu kamar tidak menyala',
       description: 'Lampu di kamar saya sudah mati sejak 3 hari lalu.',
       category: 'LISTRIK',
       status: AppConstants.ticketStatusPending,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       createdAt: DateTime.now().subtract(const Duration(days: 3)),
     ),
     TicketModel(
-      id: 2,
+      id: '2',
       title: 'Keran kamar mandi bocor',
       description: 'Keran air di kamar mandi terus menetes.',
       category: 'AIR',
       status: AppConstants.ticketStatusInProgress,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       ownerNote: 'Sedang menunggu tukang ledeng',
       createdAt: DateTime.now().subtract(const Duration(days: 7)),
     ),
     TicketModel(
-      id: 3,
+      id: '3',
       title: 'Pintu lemari rusak',
       description: 'Engsel pintu lemari patah dan tidak bisa ditutup.',
       category: 'MEBEL',
       status: AppConstants.ticketStatusDone,
       imageUrls: [],
-      renterId: 1,
+      renterId: '1',
       renterName: 'Andi Pratama',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       ownerNote: 'Sudah diperbaiki oleh tukang',
       createdAt: DateTime.now().subtract(const Duration(days: 14)),
@@ -400,12 +400,12 @@ class MockService {
   ];
 
   static final List<ReservationModel> _mockOwnerReservations = [
-    ReservationModel(
-      id: 10,
-      kostId: 1,
+ReservationModel(
+      id: '10',
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       kostAddress: 'Jl. Dr. Mansyur No. 12',
-      renterId: 3,
+      renterId: '3',
       renterName: 'Citra Lestari',
       renterEmail: 'citra@example.com',
       renterPhone: '085678901234',
@@ -415,12 +415,12 @@ class MockService {
       checkInDate: DateTime.now().add(const Duration(days: 7)),
       createdAt: DateTime.now().subtract(const Duration(hours: 2)),
     ),
-    ReservationModel(
-      id: 11,
-      kostId: 1,
+ReservationModel(
+      id: '11',
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       kostAddress: 'Jl. Dr. Mansyur No. 12',
-      renterId: 4,
+      renterId: '4',
       renterName: 'Dani Ramadhan',
       renterEmail: 'dani@example.com',
       renterPhone: '086789012345',
@@ -432,12 +432,12 @@ class MockService {
       checkInDate: DateTime.now().add(const Duration(days: 10)),
       createdAt: DateTime.now().subtract(const Duration(hours: 5)),
     ),
-    ReservationModel(
-      id: 12,
-      kostId: 1,
+ReservationModel(
+      id: '12',
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       kostAddress: 'Jl. Dr. Mansyur No. 12',
-      renterId: 5,
+      renterId: '5',
       renterName: 'Eka Putri',
       renterEmail: 'eka@example.com',
       renterPhone: '087890123456',
@@ -451,20 +451,20 @@ class MockService {
 
   static final List<TicketModel> _mockOwnerTickets = [
     TicketModel(
-      id: 10,
+      id: '10',
       title: 'AC kamar 2 tidak dingin',
       description: 'AC di kamar 2 sudah seminggu tidak berfungsi optimal.',
       category: 'LISTRIK',
       status: AppConstants.ticketStatusPending,
       imageUrls: [],
-      renterId: 3,
+      renterId: '3',
       renterName: 'Citra Lestari',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       createdAt: DateTime.now().subtract(const Duration(days: 2)),
     ),
     TicketModel(
-      id: 11,
+      id: '11',
       title: 'Saluran air tersumbat',
       description: 'Kamar mandi kamar 4 salurannya tersumbat.',
       category: 'AIR',
@@ -472,9 +472,9 @@ class MockService {
       imageUrls: [
         'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400',
       ],
-      renterId: 4,
+      renterId: '4',
       renterName: 'Dani Ramadhan',
-      kostId: 1,
+      kostId: '1',
       kostName: 'Kost Mawar Indah',
       ownerNote: 'Sudah dihubungi tukang, akan datang besok',
       createdAt: DateTime.now().subtract(const Duration(days: 4)),
@@ -483,7 +483,7 @@ class MockService {
 
   static final List<UserModel> _mockPendingOwners = [
     UserModel(
-      id: 20,
+      id: '20',
       name: 'Pak Joko Susilo',
       email: 'joko@example.com',
       phone: '081234567890',
@@ -491,7 +491,7 @@ class MockService {
       isVerified: false,
     ),
     UserModel(
-      id: 21,
+      id: '21',
       name: 'Bu Siti Rahayu',
       email: 'siti@example.com',
       phone: '082345678901',

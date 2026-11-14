@@ -1,0 +1,401 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function hasRole(role) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    function validImageUrl(url) {
+      return url is string && url.size() > 0 && url.size() <= 2048
+        && url.matches('https://[^/@?#\\s]+([/?#][^\\s]*)?');
+    }
+
+    // Approval and inventory consumption must be committed together.
+    function approvesReservation(reservationId, kostId) {
+      let before = get(/databases/$(database)/documents/reservations/$(reservationId)).data;
+      let after = getAfter(/databases/$(database)/documents/reservations/$(reservationId)).data;
+      let kost = get(/databases/$(database)/documents/kost/$(kostId)).data;
+      let nextKost = getAfter(/databases/$(database)/documents/kost/$(kostId)).data;
+      return hasRole('OWNER')
+        && before.ownerId == request.auth.uid && kost.ownerId == request.auth.uid
+        && before.kostId == kostId
+        && before.status == 'PENDING' && after.status == 'APPROVED'
+        && after.diff(before).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && after.updatedAt == request.time
+        && kost.availableRooms > 0
+        && nextKost.availableRooms == kost.availableRooms - 1
+        && nextKost.lastReservationId == reservationId
+        && nextKost.updatedAt == request.time
+        && nextKost.diff(kost).affectedKeys()
+          .hasOnly(['availableRooms', 'lastReservationId', 'updatedAt']);
+    }
+
+    match /users/{userId} {
+      function isSelf() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function validProfile() {
+        let data = request.resource.data;
+        return data.keys().hasAll([
+            'name', 'email', 'phone', 'role', 'isVerified', 'createdAt'
+          ])
+          && data.keys().hasOnly([
+            'name', 'email', 'phone', 'role', 'isVerified', 'createdAt',
+            'avatarUrl', 'bio'
+          ])
+          && data.name is string && data.name.size() > 0
+          && data.name.size() <= 100
+          && data.email is string && data.email.size() <= 254
+          && data.phone is string && data.phone.size() <= 30
+          && data.role in ['RENTER', 'OWNER', 'ADMIN']
+          && data.isVerified is bool
+          && data.createdAt is timestamp
+          && (data.get('avatarUrl', null) == null
+            || (data.avatarUrl is string && data.avatarUrl.size() <= 2048))
+          && (data.get('bio', null) == null
+            || (data.bio is string && data.bio.size() <= 500));
+      }
+
+      allow get: if isSelf();
+      // Dashboard manajemen pengguna hanya dapat dibaca admin.
+      allow get, list: if hasRole('ADMIN');
+
+      allow create: if isSelf() && validProfile()
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role in ['RENTER', 'OWNER']
+        && request.resource.data.isVerified == false
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isSelf() && validProfile()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'phone', 'avatarUrl', 'bio']);
+
+      function verifiesOwner() {
+        let before = get(/databases/$(database)/documents/ownerVerifications/$(userId)).data;
+        let after = getAfter(/databases/$(database)/documents/ownerVerifications/$(userId)).data;
+        return before.status == 'PROSES' && after.status in ['ACC', 'TOLAK']
+          && after.ownerId == userId && after.reviewedBy == request.auth.uid
+          && after.reviewedAt == request.time && after.updatedAt == request.time
+          && request.resource.data.isVerified == (after.status == 'ACC');
+      }
+      allow update: if hasRole('ADMIN') && resource.data.role == 'OWNER'
+        && resource.data.isVerified == false && validProfile()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isVerified'])
+        && verifiesOwner();
+    }
+
+    match /ownerVerifications/{ownerId} {
+      function validSubmission() {
+        let data = request.resource.data;
+        let fields = [
+          'ownerId', 'name', 'email', 'phone', 'ktpNumber', 'propertyName',
+          'propertyAddress', 'propertyType', 'ktpImageUrl', 'sertifikatImageUrl',
+          'fotoRumahImageUrl', 'status', 'rejectionReason', 'reviewedBy',
+          'reviewedAt', 'submittedAt', 'updatedAt'
+        ];
+        return data.keys().hasAll(fields) && data.keys().hasOnly(fields)
+          && data.ownerId == ownerId
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.email is string && data.email.size() <= 254
+          && data.phone is string && data.phone.size() > 0 && data.phone.size() <= 30
+          && data.ktpNumber is string && data.ktpNumber.matches('[0-9]{16}')
+          && data.propertyName is string && data.propertyName.matches('.*[^ ].*')
+          && data.propertyName.size() <= 150
+          && data.propertyAddress is string && data.propertyAddress.matches('.*[^ ].*')
+          && data.propertyAddress.size() <= 500
+          && data.propertyType in ['PUTRA', 'PUTRI', 'CAMPUR']
+          && validImageUrl(data.ktpImageUrl) && validImageUrl(data.sertifikatImageUrl)
+          && validImageUrl(data.fotoRumahImageUrl)
+          && data.status in ['PROSES', 'ACC', 'TOLAK']
+          && data.submittedAt is timestamp && data.updatedAt is timestamp
+          && (data.rejectionReason == null || (data.rejectionReason is string
+            && data.rejectionReason.size() >= 10 && data.rejectionReason.size() <= 300))
+          && (data.reviewedBy == null || data.reviewedBy is string)
+          && (data.reviewedAt == null || data.reviewedAt is timestamp);
+      }
+      function submitsOwnApplication() {
+        let data = request.resource.data;
+        let owner = get(/databases/$(database)/documents/users/$(ownerId)).data;
+        return hasRole('OWNER') && request.auth.uid == ownerId
+          && owner.isVerified == false && data.name == owner.name
+          && data.email == owner.email && data.phone == owner.phone
+          && data.status == 'PROSES' && data.rejectionReason == null
+          && data.reviewedBy == null && data.reviewedAt == null
+          && data.submittedAt == request.time && data.updatedAt == request.time;
+      }
+      allow get: if request.auth != null
+        && (request.auth.uid == ownerId || hasRole('ADMIN'));
+      allow list: if hasRole('ADMIN');
+      allow create: if validSubmission() && submitsOwnApplication();
+      allow update: if resource.data.status == 'TOLAK'
+        && validSubmission() && submitsOwnApplication();
+      allow update: if hasRole('ADMIN') && resource.data.status == 'PROSES'
+        && validSubmission()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'rejectionReason', 'reviewedBy', 'reviewedAt', 'updatedAt'
+        ])
+        && request.resource.data.status in ['ACC', 'TOLAK']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && get(/databases/$(database)/documents/users/$(ownerId)).data.role == 'OWNER'
+        && get(/databases/$(database)/documents/users/$(ownerId)).data.isVerified == false
+        && getAfter(/databases/$(database)/documents/users/$(ownerId)).data.isVerified
+          == (request.resource.data.status == 'ACC')
+        && ((request.resource.data.status == 'ACC' && request.resource.data.rejectionReason == null)
+          || (request.resource.data.status == 'TOLAK'
+            && request.resource.data.rejectionReason is string
+            && request.resource.data.rejectionReason.matches('.*[^ ].*')));
+    }
+
+    match /kost/{kostId} {
+      function isOwner() {
+        return request.auth != null
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'OWNER';
+      }
+
+      function validKost() {
+        let data = request.resource.data;
+        let fields = [
+          'ownerId', 'ownerName', 'name', 'address', 'city', 'pricePerMonth',
+          'type', 'facilities', 'imageUrls', 'isSplitBillAvailable',
+          'totalRooms', 'availableRooms', 'description', 'latitude', 'longitude',
+          'rating', 'reviewCount', 'createdAt', 'updatedAt'
+        ];
+        return data.keys().hasAll(fields)
+          && data.keys().hasOnly(fields.concat([
+            'lastReservationId', 'verificationStatus', 'rejectionReason',
+            'reviewedBy', 'reviewedAt'
+          ]))
+          && data.get('verificationStatus', 'PROSES') in ['PROSES', 'ACC', 'TOLAK']
+          && (data.get('rejectionReason', null) == null
+            || (data.rejectionReason is string && data.rejectionReason.size() >= 10
+              && data.rejectionReason.size() <= 300))
+          && (data.get('reviewedBy', null) == null || data.reviewedBy is string)
+          && (data.get('reviewedAt', null) == null || data.reviewedAt is timestamp)
+          && (data.get('lastReservationId', null) == null
+            || data.lastReservationId is string)
+          && data.ownerId is string
+          && data.ownerName is string && data.ownerName.size() <= 100
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 150
+          && data.address is string && data.address.size() > 0 && data.address.size() <= 500
+          && data.city is string && data.city.size() > 0 && data.city.size() <= 100
+          && data.pricePerMonth is number
+          && data.pricePerMonth > 0 && data.pricePerMonth <= 1000000000000
+          && data.type in ['PUTRA', 'PUTRI', 'CAMPUR']
+          && data.facilities is list && data.facilities.size() > 0
+          && data.facilities.size() <= 12
+          && data.facilities.hasOnly([
+            'WiFi', 'AC', 'TV', 'Lemari', 'Meja Belajar', 'Kamar Mandi Dalam',
+            'Dapur Bersama', 'Parkir Motor', 'Parkir Mobil', 'Keamanan 24 Jam',
+            'Laundry', 'Kulkas'
+          ])
+          && data.imageUrls is list && data.imageUrls.size() <= 1
+          && (data.imageUrls.size() == 0 || (
+            validImageUrl(data.imageUrls[0])))
+          && data.isSplitBillAvailable is bool
+          && data.totalRooms is int && data.totalRooms >= 1 && data.totalRooms <= 10000
+          && data.availableRooms is int && data.availableRooms >= 0
+          && data.availableRooms <= data.totalRooms
+          && (data.description == null || (
+            data.description is string && data.description.size() <= 5000))
+          && (data.latitude == null || (
+            data.latitude is number && data.latitude >= -90 && data.latitude <= 90))
+          && (data.longitude == null || (
+            data.longitude is number && data.longitude >= -180 && data.longitude <= 180))
+          && (data.rating == null || (
+            data.rating is number && data.rating >= 0 && data.rating <= 5))
+          && data.reviewCount is int && data.reviewCount >= 0
+          && data.createdAt is timestamp && data.updatedAt is timestamp;
+      }
+
+      function pendingReview() {
+        let data = request.resource.data;
+        return data.keys().hasAll([
+            'verificationStatus', 'rejectionReason', 'reviewedBy', 'reviewedAt'
+          ])
+          && data.verificationStatus == 'PROSES'
+          && data.rejectionReason == null
+          && data.reviewedBy == null && data.reviewedAt == null;
+      }
+
+      allow read: if request.auth != null;
+      allow create: if isOwner() && validKost()
+        && pendingReview()
+        && !('lastReservationId' in request.resource.data)
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerName ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
+        && request.resource.data.availableRooms == request.resource.data.totalRooms
+        && request.resource.data.rating == null && request.resource.data.reviewCount == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner() && resource.data.ownerId == request.auth.uid
+        && validKost() && pendingReview()
+        && request.resource.data.ownerName ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.totalRooms - request.resource.data.availableRooms
+          == resource.data.totalRooms - resource.data.availableRooms
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ownerName', 'name', 'address', 'city', 'pricePerMonth', 'type',
+          'facilities', 'imageUrls', 'isSplitBillAvailable', 'totalRooms',
+          'availableRooms', 'description', 'updatedAt', 'verificationStatus',
+          'rejectionReason', 'reviewedBy', 'reviewedAt'
+        ]);
+      // Keputusan kamar terpisah dari verifikasi identitas pemilik.
+      allow update: if hasRole('ADMIN') && validKost()
+        && resource.data.get('verificationStatus', 'PROSES') == 'PROSES'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'verificationStatus', 'rejectionReason', 'reviewedBy', 'reviewedAt', 'updatedAt'
+        ])
+        && request.resource.data.verificationStatus in ['ACC', 'TOLAK']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && ((request.resource.data.verificationStatus == 'ACC'
+            && request.resource.data.rejectionReason == null)
+          || (request.resource.data.verificationStatus == 'TOLAK'
+            && request.resource.data.rejectionReason is string
+            && request.resource.data.rejectionReason.matches('.*[^ ].*')));
+      allow delete: if isOwner() && resource.data.ownerId == request.auth.uid
+        && resource.data.totalRooms == resource.data.availableRooms;
+      allow update: if validKost()
+        && approvesReservation(request.resource.data.get('lastReservationId', '_'), kostId);
+    }
+
+    match /users/{userId}/reservationLocks/{kostId} {
+      function pointsToNewReservation() {
+        let data = request.resource.data;
+        let reservation = getAfter(/databases/$(database)/documents/reservations/$(data.reservationId)).data;
+        return hasRole('RENTER') && request.auth.uid == userId
+          && data.keys().hasAll(['reservationId', 'renterId', 'kostId'])
+          && data.keys().hasOnly(['reservationId', 'renterId', 'kostId'])
+          && data.reservationId is string && data.reservationId.size() > 0
+          && data.renterId == userId && data.kostId == kostId
+          && !exists(/databases/$(database)/documents/reservations/$(data.reservationId))
+          && reservation.renterId == userId && reservation.kostId == kostId
+          && reservation.status == 'PENDING' && reservation.createdAt == request.time;
+      }
+      allow get: if request.auth != null && request.auth.uid == userId;
+      allow create: if pointsToNewReservation();
+      allow update: if pointsToNewReservation()
+        && get(/databases/$(database)/documents/reservations/$(resource.data.reservationId)).data.status == 'REJECTED';
+    }
+
+    match /reservations/{reservationId} {
+      function validNewReservation() {
+        let data = request.resource.data;
+        let kost = get(/databases/$(database)/documents/kost/$(data.kostId)).data;
+        let renter = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        let fields = [
+          'ownerId', 'kostId', 'kostName', 'kostAddress', 'kostImageUrl',
+          'renterId', 'renterName', 'renterEmail', 'renterPhone', 'status',
+          'isSplitBill', 'splitMemberCount', 'totalPrice', 'pricePerPerson',
+          'checkInDate', 'checkOutDate', 'notes', 'createdAt', 'updatedAt'
+        ];
+        return hasRole('RENTER') && data.keys().hasAll(fields) && data.keys().hasOnly(fields)
+          && data.kostId is string && data.kostId.size() > 0
+          && data.renterId == request.auth.uid
+          && data.renterName == renter.name && data.renterEmail == renter.email
+          && data.renterPhone == renter.phone
+          && data.ownerId == kost.ownerId && data.ownerId != data.renterId
+          && data.kostName == kost.name && data.kostAddress == kost.address
+          && data.kostImageUrl == (kost.imageUrls.size() == 0 ? null : kost.imageUrls[0])
+          && kost.get('verificationStatus', 'PROSES') == 'ACC'
+          && kost.availableRooms > 0 && data.totalPrice == kost.pricePerMonth
+          && data.status == 'PENDING' && data.isSplitBill is bool
+          && ((!data.isSplitBill && data.splitMemberCount == null && data.pricePerPerson == null)
+            || (data.isSplitBill && kost.isSplitBillAvailable
+              && data.splitMemberCount is int && data.splitMemberCount >= 2
+              && data.splitMemberCount <= 4
+              && data.pricePerPerson == data.totalPrice * 1.0 / data.splitMemberCount))
+          && data.checkInDate is timestamp
+          && data.checkInDate >= request.time - duration.value(1, 'd')
+          && data.checkInDate <= request.time + duration.value(91, 'd')
+          && data.checkOutDate == null
+          && (data.notes == null || (data.notes is string && data.notes.size() <= 2000))
+          && data.createdAt == request.time && data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/reservationLocks/$(data.kostId)).data.reservationId == reservationId;
+      }
+      allow read: if request.auth != null
+        && (resource.data.renterId == request.auth.uid || resource.data.ownerId == request.auth.uid);
+      allow create: if validNewReservation();
+      allow update: if hasRole('OWNER') && resource.data.ownerId == request.auth.uid
+        && resource.data.status == 'PENDING'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && (request.resource.data.status == 'REJECTED'
+          || approvesReservation(reservationId, resource.data.kostId));
+    }
+
+    match /tickets/{ticketId} {
+      function validPhoto(url) {
+        return validImageUrl(url);
+      }
+      function validTicket() {
+        let data = request.resource.data;
+        let fields = [
+          'title', 'description', 'category', 'incidentDate', 'imageUrls',
+          'reservationId', 'ownerId', 'kostId', 'kostName', 'renterId',
+          'renterName', 'status', 'ownerNote', 'createdAt', 'updatedAt'
+        ];
+        return data.keys().hasAll(fields) && data.keys().hasOnly(fields)
+          && data.title is string && data.title.size() >= 5 && data.title.size() <= 100
+          && data.description is string && data.description.size() >= 15 && data.description.size() <= 500
+          && data.category in ['AIR', 'LISTRIK', 'MEBEL', 'STRUKTUR', 'LAINNYA']
+          && data.incidentDate is timestamp
+          && data.imageUrls is list && data.imageUrls.size() <= 3
+          && (data.imageUrls.size() < 1 || validPhoto(data.imageUrls[0]))
+          && (data.imageUrls.size() < 2 || validPhoto(data.imageUrls[1]))
+          && (data.imageUrls.size() < 3 || validPhoto(data.imageUrls[2]))
+          && data.reservationId is string && data.reservationId.size() > 0
+          && data.ownerId is string && data.ownerId.size() > 0
+          && data.kostId is string && data.kostId.size() > 0
+          && data.kostName is string && data.kostName.size() <= 150
+          && data.renterId is string && data.renterId.size() > 0
+          && data.renterName is string && data.renterName.size() <= 100
+          && data.status in ['PENDING', 'IN_PROGRESS', 'DONE']
+          && (data.ownerNote == null || (data.ownerNote is string && data.ownerNote.size() <= 2000))
+          && data.createdAt is timestamp && data.updatedAt is timestamp;
+      }
+      function validIncidentDate() {
+        return request.resource.data.incidentDate <= request.time + duration.value(1, 'd')
+          && request.resource.data.incidentDate >= request.time - duration.value(366, 'd');
+      }
+      function linkedToApprovedReservation() {
+        let data = request.resource.data;
+        let reservation = get(/databases/$(database)/documents/reservations/$(data.reservationId)).data;
+        let renter = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        return hasRole('RENTER') && data.renterId == request.auth.uid
+          && data.renterName == renter.name
+          && reservation.status == 'APPROVED' && reservation.renterId == request.auth.uid
+          && data.ownerId == reservation.ownerId && data.kostId == reservation.kostId
+          && data.kostName == reservation.kostName;
+      }
+      allow read: if request.auth != null
+        && (resource.data.renterId == request.auth.uid || resource.data.ownerId == request.auth.uid);
+      allow create: if validTicket() && validIncidentDate() && linkedToApprovedReservation()
+        && request.resource.data.status == 'PENDING' && request.resource.data.ownerNote == null
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if validTicket() && request.resource.data.updatedAt == request.time
+        && ((hasRole('RENTER') && resource.data.renterId == request.auth.uid
+          && resource.data.status == 'PENDING' && validIncidentDate()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['title', 'description', 'category', 'incidentDate', 'imageUrls', 'updatedAt']))
+        || (hasRole('OWNER') && resource.data.ownerId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'ownerNote', 'updatedAt'])
+          && ((resource.data.status == 'PENDING' && request.resource.data.status == 'IN_PROGRESS')
+            || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status == 'DONE'))));
+      allow delete: if hasRole('RENTER') && resource.data.renterId == request.auth.uid
+        && resource.data.status == 'PENDING';
+    }
+
+    // Akses fitur lain dibuka saat repository dan aturannya siap.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
