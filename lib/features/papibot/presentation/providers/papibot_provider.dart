@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/network/mock_service.dart';
+import '../../../../data/repositories/kost_repository.dart';
 import '../../../../data/models/kost_model.dart';
 
 enum MessageSender { user, bot }
@@ -139,8 +139,7 @@ class PapibotProvider extends ChangeNotifier {
 
     if (!hasKostIntent) return [];
 
-    // Ambil dari MockService lalu filter berdasarkan query
-    final all = await MockService.fetchKostList();
+    final all = await KostRepository.instance.fetchAll();
     return all
         .where((k) {
           if (q.contains('putri') && k.type != 'PUTRI') return false;

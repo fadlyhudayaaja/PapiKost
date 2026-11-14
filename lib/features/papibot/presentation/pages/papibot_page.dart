@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:papikost_mobile/core/widgets/url_image.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -177,7 +177,9 @@ class _PapibotPageState extends State<PapibotPage> {
               decoration: BoxDecoration(
                 color: AppColors.secondary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: AppColors.secondary.withValues(alpha: 0.4),
+                ),
               ),
               child: Text(
                 suggestions[i],
@@ -267,7 +269,7 @@ class _PapibotPageState extends State<PapibotPage> {
 
 class _ChatBubble extends StatelessWidget {
   final ChatMessage message;
-  final void Function(int) onKostTap;
+  final void Function(String) onKostTap;
 
   const _ChatBubble({required this.message, required this.onKostTap});
 
@@ -465,8 +467,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                       width: 8,
                       height: 8 + (value * 4),
                       decoration: BoxDecoration(
-                        color: AppColors.secondary.withValues(alpha: 
-                          0.4 + (value * 0.6),
+                        color: AppColors.secondary.withValues(
+                          alpha: 0.4 + (value * 0.6),
                         ),
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -521,7 +523,7 @@ class _KostSuggestionCard extends StatelessWidget {
                 bottomLeft: Radius.circular(12),
               ),
               child: kost.imageUrls.isNotEmpty
-                  ? CachedNetworkImage(
+                  ? UrlImage(
                       imageUrl: kost.imageUrls.first,
                       width: 70,
                       height: 160,
