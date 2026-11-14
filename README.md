@@ -62,7 +62,26 @@ npm ci
 npm run test:emulator
 ```
 
-Tes tidak menerbitkan rules atau mengubah data Firebase produksi. Lihat
-[status backend](BACKEND_AUDIT.md), [panduan reservasi](FIREBASE_RESERVASI.md),
-[verifikasi](FIREBASE_VERIFIKASI_PEMILIK.md), [laporan](FIREBASE_LAPORAN.md), dan
-[foto](FIREBASE_UPLOAD_DOKUMEN.md) untuk pengaturan serta batas fitur.
+Tes tidak menerbitkan rules atau mengubah data Firebase produksi.
+
+## Pengaturan Firebase
+
+Login email/password harus aktif di Firebase Authentication. Profil di koleksi
+`users` menggunakan UID Firebase dan peran `RENTER`, `OWNER`, atau `ADMIN`.
+Kamar baru harus disetujui admin sebelum muncul di katalog dan dapat dipesan.
+Persetujuan reservasi oleh pemilik mengurangi satu kamar tersedia; laporan
+kerusakan hanya dapat dibuat untuk reservasi yang sudah disetujui.
+
+Pengelola Firebase dapat menerbitkan `firestore.rules` dan
+`firestore.indexes.json` memakai konfigurasi `firebase.json`. Jalankan dari
+folder `firebase_tests` setelah `npm ci`:
+
+```sh
+npx firebase login
+npx firebase deploy --only firestore --project papikost-913c2 --config ../firebase.json
+```
+
+Foto kamar bersifat opsional, dokumen verifikasi pemilik memerlukan tiga URL
+gambar, dan laporan menerima maksimal tiga URL foto. Akses berkas mengikuti
+layanan asalnya; rules Firestore melindungi data, bukan berkas pada URL luar.
+KTP dan sertifikat perlu akses terbatas yang dapat dibuka oleh admin.
