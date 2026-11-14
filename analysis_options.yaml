@@ -9,6 +9,9 @@
 # packages, and plugins designed to encourage good coding practices.
 analyzer:
   exclude:
+    - firebase_tests/node_modules/**
+    - PapiKost/**
+    - flutter_application_1/**
     - build/**
     - android/**
     - ios/**

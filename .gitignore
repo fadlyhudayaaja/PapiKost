@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase local tests and emulator logs
+**/node_modules/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Local project copies and source archive
+/PapiKost/
+/flutter_application_1/
+/flutter_application_1.zip
