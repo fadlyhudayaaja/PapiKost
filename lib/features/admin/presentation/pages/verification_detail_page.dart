@@ -1,11 +1,11 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
-import '../../../../core/widgets/shimmer_loading.dart';
+import '../../../../core/widgets/verification_document_image.dart';
 import '../providers/admin_provider.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -19,6 +19,22 @@ class VerificationDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<AdminProvider>();
+    final latest = prov.submissions.where(
+      (item) => item.id == this.submission.id,
+    );
+    if (latest.isEmpty || prov.state == AdminLoadState.error) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Detail Verifikasi')),
+        body: Center(
+          child: Text(
+            prov.error.isEmpty
+                ? 'Pengajuan tidak tersedia. Kembali dan muat ulang daftar.'
+                : prov.error,
+          ),
+        ),
+      );
+    }
+    final submission = latest.first;
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
@@ -44,9 +60,26 @@ class VerificationDetailPage extends StatelessWidget {
               icon: Icons.person_outline_rounded,
               children: [
                 _InfoRow(label: 'Nama', value: submission.name),
-                _InfoRow(label: 'Email', value: submission.email),
-                _InfoRow(label: 'No. HP', value: submission.phone),
-                _InfoRow(label: 'No. KTP', value: submission.ktpNumber),
+                if (!submission.isKostSubmission) ...[
+                  _InfoRow(label: 'Email', value: submission.email),
+                  _InfoRow(label: 'No. HP', value: submission.phone),
+                  _InfoRow(label: 'No. KTP', value: submission.ktpNumber),
+                ],
+                _InfoRow(
+                  label: 'Diajukan',
+                  value: DateFormat(
+                    'dd MMM yyyy HH:mm',
+                    'id_ID',
+                  ).format(submission.submittedAt),
+                ),
+                if (submission.reviewedAt != null)
+                  _InfoRow(
+                    label: 'Diproses',
+                    value: DateFormat(
+                      'dd MMM yyyy HH:mm',
+                      'id_ID',
+                    ).format(submission.reviewedAt!),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
@@ -59,16 +92,47 @@ class VerificationDetailPage extends StatelessWidget {
                 _InfoRow(label: 'Nama Kost', value: submission.propertyName),
                 _InfoRow(label: 'Alamat', value: submission.propertyAddress),
                 _InfoRow(label: 'Tipe', value: submission.propertyType),
+                if (submission.kost case final kost?) ...[
+                  _InfoRow(label: 'Kota', value: kost.city),
+                  _InfoRow(
+                    label: 'Harga / bulan',
+                    value: NumberFormat.currency(
+                      locale: 'id_ID',
+                      symbol: 'Rp ',
+                      decimalDigits: 0,
+                    ).format(kost.pricePerMonth),
+                  ),
+                  _InfoRow(label: 'Jumlah kamar', value: '${kost.totalRooms}'),
+                  _InfoRow(
+                    label: 'Fasilitas',
+                    value: kost.facilities.join(', '),
+                  ),
+                  _InfoRow(
+                    label: 'Patungan',
+                    value: kost.isSplitBillAvailable ? 'Ya' : 'Tidak',
+                  ),
+                  if (kost.description?.isNotEmpty == true)
+                    _InfoRow(label: 'Deskripsi', value: kost.description!),
+                ],
               ],
             ),
             const SizedBox(height: 16),
 
             // ── Dokumen ───────────────────────────────────────────────────
-            _DocumentSection(
-              ktpUrl: submission.ktpImageUrl,
-              sertifikatUrl: submission.sertifikatImageUrl,
-              fotoRumahUrl: submission.fotoRumahImageUrl,
-            ),
+            if (submission.isKostSubmission)
+              if (submission.fotoRumahImageUrl.isNotEmpty)
+                VerificationDocumentImage(
+                  reference: submission.fotoRumahImageUrl,
+                  height: 220,
+                )
+              else
+                const Text('Foto kamar belum ditambahkan.')
+            else
+              _DocumentSection(
+                ktpUrl: submission.ktpImageUrl,
+                sertifikatUrl: submission.sertifikatImageUrl,
+                fotoRumahUrl: submission.fotoRumahImageUrl,
+              ),
 
             // ── Alasan Penolakan (jika ada) ───────────────────────────────
             if (submission.status == VerificationStatus.tolak &&
@@ -162,7 +226,9 @@ class VerificationDetailPage extends StatelessWidget {
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(ok ? 'Pengajuan berhasil disetujui' : 'Gagal'),
+                  content: Text(
+                    ok ? 'Pengajuan berhasil disetujui' : prov.error,
+                  ),
                   backgroundColor: ok ? AppColors.success : AppColors.error,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
@@ -180,107 +246,96 @@ class VerificationDetailPage extends StatelessWidget {
     );
   }
 
-  void _showRejectDialog(BuildContext context, AdminProvider prov) {
-    final reasonCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
+  Future<void> _showRejectDialog(
+    BuildContext context,
+    AdminProvider prov,
+  ) async {
+    final reason = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (dCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        icon: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: const BoxDecoration(
-            color: AppColors.errorLight,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.cancel_outlined,
-            color: AppColors.error,
-            size: 28,
-          ),
-        ),
-        title: const Text('Tolak Pengajuan'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Tuliskan alasan penolakan agar pemohon dapat memperbaiki dokumennya.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.grey600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: reasonCtrl,
-                maxLines: 4,
-                maxLength: 300,
-                style: AppTextStyles.bodyMedium,
-                decoration: InputDecoration(
-                  hintText: 'Contoh: Foto KTP kurang jelas, dokumen tidak sesuai...',
-                  hintStyle: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.grey400,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.primary),
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Alasan penolakan wajib diisi.';
-                  }
-                  if (v.trim().length < 10) {
-                    return 'Alasan minimal 10 karakter.';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          OutlinedButton(
-            onPressed: () {
-              Navigator.pop(dCtx);
-              reasonCtrl.dispose();
-            },
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final reason = reasonCtrl.text.trim();
-              Navigator.pop(dCtx);
-              reasonCtrl.dispose();
-
-              final ok = await prov.rejectSubmission(submission.id, reason);
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(ok ? 'Pengajuan berhasil ditolak' : 'Gagal'),
-                  backgroundColor: ok ? AppColors.error : AppColors.grey500,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              );
-              if (ok) Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Tolak Sekarang'),
-          ),
-        ],
+      builder: (_) => const _RejectDialog(),
+    );
+    if (reason == null || !context.mounted) return;
+    final ok = await prov.rejectSubmission(submission.id, reason);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Pengajuan berhasil ditolak' : prov.error),
+        backgroundColor: ok ? AppColors.error : AppColors.grey500,
+        behavior: SnackBarBehavior.floating,
       ),
+    );
+    if (ok) Navigator.pop(context);
+  }
+}
+
+class _RejectDialog extends StatefulWidget {
+  const _RejectDialog();
+
+  @override
+  State<_RejectDialog> createState() => _RejectDialogState();
+}
+
+class _RejectDialogState extends State<_RejectDialog> {
+  final _reason = TextEditingController();
+  final _form = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      icon: const Icon(Icons.cancel_outlined, color: AppColors.error, size: 32),
+      title: const Text('Tolak Pengajuan'),
+      content: Form(
+        key: _form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Tuliskan alasan penolakan agar pemohon dapat memperbaiki dokumennya.',
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _reason,
+              maxLines: 4,
+              maxLength: 300,
+              decoration: const InputDecoration(
+                hintText:
+                    'Contoh: Foto KTP kurang jelas, dokumen tidak sesuai...',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                final reason = value?.trim() ?? '';
+                if (reason.isEmpty) return 'Alasan penolakan wajib diisi.';
+                if (reason.length < 10) return 'Alasan minimal 10 karakter.';
+                if (reason.length > 300) return 'Alasan maksimal 300 karakter.';
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_form.currentState!.validate()) {
+              Navigator.pop(context, _reason.text.trim());
+            }
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+          child: const Text('Tolak Sekarang'),
+        ),
+      ],
     );
   }
 }
@@ -327,10 +382,7 @@ class _StatusBanner extends StatelessWidget {
         children: [
           Icon(icon, color: fg, size: 24),
           const SizedBox(width: 12),
-          Text(
-            label,
-            style: AppTextStyles.labelLarge.copyWith(color: fg),
-          ),
+          Text(label, style: AppTextStyles.labelLarge.copyWith(color: fg)),
         ],
       ),
     );
@@ -410,9 +462,7 @@ class _InfoRow extends StatelessWidget {
               style: AppTextStyles.caption.copyWith(color: AppColors.grey500),
             ),
           ),
-          Expanded(
-            child: Text(value, style: AppTextStyles.labelMedium),
-          ),
+          Expanded(child: Text(value, style: AppTextStyles.labelMedium)),
         ],
       ),
     );
@@ -460,90 +510,67 @@ class _DocumentSection extends StatelessWidget {
 class _DocCard extends StatelessWidget {
   final String title;
   final String url;
-
   const _DocCard({required this.title, required this.url});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Card(
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
                 const Icon(
                   Icons.image_outlined,
-                  size: 16,
+                  size: 18,
                   color: AppColors.primary,
                 ),
-                const SizedBox(width: 6),
-                Text(title, style: AppTextStyles.labelMedium),
+                const SizedBox(width: 8),
+                Expanded(child: Text(title, style: AppTextStyles.labelMedium)),
+                const Icon(Icons.zoom_in_rounded, size: 20),
               ],
             ),
           ),
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(12),
-            ),
-            child: GestureDetector(
-              onTap: () => _viewFullImage(context, url),
-              child: CachedNetworkImage(
-                imageUrl: url,
-                width: double.infinity,
-                height: 180,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => const ShimmerBox(height: 180),
-                errorWidget: (_, __, ___) => Container(
-                  height: 180,
-                  color: AppColors.grey100,
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.broken_image_outlined,
-                          color: AppColors.grey400,
-                          size: 36,
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Gagal memuat gambar',
-                          style: TextStyle(color: AppColors.grey400),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          GestureDetector(
+            onTap: () => _viewFullImage(context),
+            child: VerificationDocumentImage(reference: url, height: 180),
           ),
         ],
       ),
     );
   }
 
-  void _viewFullImage(BuildContext context, String url) {
-    showDialog(
+  void _viewFullImage(BuildContext context) {
+    showDialog<void>(
       context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
+      builder: (dialogContext) => Dialog(
         insetPadding: const EdgeInsets.all(16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 16),
+                Expanded(child: Text(title)),
+                IconButton(
+                  tooltip: 'Tutup',
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            InteractiveViewer(
+              minScale: 0.7,
+              maxScale: 5,
+              child: VerificationDocumentImage(
+                reference: url,
+                height: MediaQuery.sizeOf(context).height * 0.65,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -561,9 +588,7 @@ class _RejectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.errorLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.error.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,9 +612,7 @@ class _RejectionCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             reason,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.error,
-            ),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
           ),
         ],
       ),
