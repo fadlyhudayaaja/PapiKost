@@ -1,0 +1,57 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function roleIs(role) {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    match /kostPhotos/{ownerId}/{photoId}/{fileName} {
+      // Metadata dan gambar katalog dapat dibaca akun yang sedang login.
+      allow get: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == ownerId
+        && roleIs('OWNER') && resource == null
+        && photoId.matches('[A-Za-z0-9-]{20,64}')
+        && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.metadata.ownerId == ownerId
+        && ((fileName == 'photo.jpg' && request.resource.contentType == 'image/jpeg')
+          || (fileName == 'photo.png' && request.resource.contentType == 'image/png')
+          || (fileName == 'photo.webp' && request.resource.contentType == 'image/webp'));
+      // Nama objek unik; foto yang telah dipakai katalog tidak ditimpa dari klien.
+    }
+    match /verificationDocuments/{ownerId}/{attemptId}/{fileName} {
+      function isSelf() {
+        return request.auth != null && request.auth.uid == ownerId;
+      }
+      function isReferenced() {
+        let path = 'verificationDocuments/' + ownerId + '/' + attemptId + '/' + fileName;
+        return firestore.exists(/databases/(default)/documents/ownerVerifications/$(ownerId))
+          && path in [
+            firestore.get(/databases/(default)/documents/ownerVerifications/$(ownerId)).data.ktpImageUrl,
+            firestore.get(/databases/(default)/documents/ownerVerifications/$(ownerId)).data.sertifikatImageUrl,
+            firestore.get(/databases/(default)/documents/ownerVerifications/$(ownerId)).data.fotoRumahImageUrl
+          ];
+      }
+      function validImage() {
+        let data = request.resource;
+        return attemptId.matches('[A-Za-z0-9-]{20,64}')
+          && data.size > 0 && data.size <= 5 * 1024 * 1024
+          && data.metadata.ownerId == ownerId
+          && data.metadata.documentType in ['ktp', 'certificate', 'property']
+          && fileName.matches(data.metadata.documentType + '[.](jpg|png|webp)')
+          && ((fileName.matches('.*[.]jpg') && data.contentType == 'image/jpeg')
+            || (fileName.matches('.*[.]png') && data.contentType == 'image/png')
+            || (fileName.matches('.*[.]webp') && data.contentType == 'image/webp'));
+      }
+      allow get: if isSelf() || (roleIs('ADMIN') && isReferenced());
+      allow create: if isSelf() && roleIs('OWNER')
+        && resource == null
+        && firestore.get(/databases/(default)/documents/users/$(ownerId)).data.isVerified == false
+        && validImage();
+      // Berkas immutable: keputusan admin tidak boleh dipengaruhi unggahan pengganti.
+      allow delete: if isSelf() && !isReferenced();
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
