@@ -40,7 +40,9 @@ import '../../features/owner/presentation/pages/add_kost_page.dart';
 
 // ── Admin ──
 import '../../features/admin/presentation/pages/admin_dashboard_page.dart';
+import '../../features/admin/presentation/pages/admin_users_page.dart';
 import '../../features/admin/presentation/pages/owner_verification_page.dart';
+import '../../features/owner/presentation/pages/owner_verification_form_page.dart';
 import '../../features/admin/presentation/providers/admin_provider.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -79,6 +81,7 @@ class AppRoutes {
   // ── Owner ─────────────────────────────────────────────────────────────────
   static const String ownerDashboard = '/owner';
   static const String ownerProfile = '/owner/profile';
+  static const String ownerVerification = '/owner/verification';
   static const String ownerAddKost = '/owner/kost/add';
   static const String reservationManagement = '/owner/reservations';
   static const String ownerTickets = '/owner/tickets';
@@ -86,6 +89,7 @@ class AppRoutes {
   // ── Admin ─────────────────────────────────────────────────────────────────
   static const String adminDashboard = '/admin';
   static const String adminVerifyOwners = '/admin/verify-owners';
+  static const String adminUsers = '/admin/users';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -100,7 +104,11 @@ GoRouter createRouter(AuthProvider authProvider) {
       final location = state.matchedLocation;
 
       if (status == AuthStatus.initial || status == AuthStatus.loading) {
-        return null;
+        final publicRoute =
+            location == AppRoutes.splash ||
+            location == AppRoutes.login ||
+            location == AppRoutes.register;
+        return publicRoute ? null : AppRoutes.splash;
       }
 
       final isAuth = status == AuthStatus.authenticated;
@@ -183,7 +191,7 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.kostDetail,
         builder: (_, state) {
-          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          final id = state.pathParameters['id'] ?? '';
           return RenterKostDetailPage(kostId: id);
         },
       ),
@@ -222,7 +230,8 @@ GoRouter createRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: AppRoutes.ticketDetailRenter,
-        builder: (_, state) => TicketDetailPage(ticketId: state.extra as int),
+        builder: (_, state) =>
+            TicketDetailPage(ticketId: state.extra as String),
       ),
 
       // ── Profile ────────────────────────────────────────────────────────────
@@ -237,6 +246,10 @@ GoRouter createRouter(AuthProvider authProvider) {
         builder: (_, __) => const AdminDashboardPage(),
       ),
       GoRoute(
+        path: AppRoutes.adminUsers,
+        builder: (_, __) => const AdminUsersPage(),
+      ),
+      GoRoute(
         path: AppRoutes.adminVerifyOwners,
         builder: (context, __) => ChangeNotifierProvider.value(
           value: context.read<AdminProvider>(),
@@ -245,6 +258,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       ),
 
       // ── Owner Shell ────────────────────────────────────────────────────────
+      GoRoute(
+        path: AppRoutes.ownerVerification,
+        builder: (_, __) => const OwnerVerificationFormPage(),
+      ),
       ShellRoute(
         builder: (_, __, child) => OwnerShellPage(child: child),
         routes: [
