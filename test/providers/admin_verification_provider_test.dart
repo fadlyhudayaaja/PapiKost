@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:papikost_mobile/data/repositories/auth_repository.dart';
 import 'package:papikost_mobile/features/admin/presentation/providers/admin_provider.dart';
-import 'support/verification_fixtures.dart';
+import '../support/fixtures/verification_fixtures.dart';
 
 void main() {
   late MockVerificationRepository repository;

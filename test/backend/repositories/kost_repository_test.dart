@@ -8,7 +8,7 @@ import 'package:papikost_mobile/data/models/kost_model.dart';
 import 'package:papikost_mobile/data/repositories/auth_repository.dart';
 import 'package:papikost_mobile/data/repositories/kost_repository.dart';
 
-import 'support/kost_fixtures.dart';
+import '../../support/fixtures/kost_fixtures.dart';
 
 class _Auth extends Mock implements FirebaseAuth {}
 

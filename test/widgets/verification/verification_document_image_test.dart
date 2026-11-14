@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:papikost_mobile/core/utils/image_url.dart';
 import 'package:papikost_mobile/core/widgets/verification_document_image.dart';
 import 'package:papikost_mobile/core/widgets/url_image.dart';
-import 'support/image_fixtures.dart';
-import 'support/image_redirect_fixtures.dart';
+import '../../support/images/image_fixtures.dart';
+import '../../support/images/image_redirect_fixtures.dart';
 import 'package:papikost_mobile/core/network/image_url_resolver.dart';
 
 void main() {

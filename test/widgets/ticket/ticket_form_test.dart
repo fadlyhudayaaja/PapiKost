@@ -9,10 +9,10 @@ import 'package:papikost_mobile/data/repositories/ticket_repository.dart';
 import 'package:papikost_mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:papikost_mobile/features/renter/ticket/providers/renter_ticket_provider.dart';
 import 'package:papikost_mobile/features/renter/ticket/pages/ticket_form_page.dart';
-import 'support/auth_fixtures.dart';
-import 'support/reservation_fixtures.dart';
-import 'support/ticket_fixtures.dart';
-import 'support/test_fonts.dart';
+import '../../support/fixtures/auth_fixtures.dart';
+import '../../support/fixtures/reservation_fixtures.dart';
+import '../../support/fixtures/ticket_fixtures.dart';
+import '../../support/helpers/test_fonts.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

@@ -5,9 +5,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:papikost_mobile/data/models/kost_model.dart';
 import 'package:papikost_mobile/data/models/user_model.dart';
 import 'package:papikost_mobile/features/owner/presentation/providers/owner_provider.dart';
-import 'support/kost_fixtures.dart';
-import 'support/reservation_fixtures.dart';
-import 'support/ticket_fixtures.dart';
+import '../support/fixtures/kost_fixtures.dart';
+import '../support/fixtures/reservation_fixtures.dart';
+import '../support/fixtures/ticket_fixtures.dart';
 
 const owner = UserModel(
   id: 'firebase-owner-a',

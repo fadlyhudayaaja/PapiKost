@@ -15,9 +15,9 @@ import 'package:papikost_mobile/features/admin/presentation/pages/owner_verifica
 import 'package:papikost_mobile/features/admin/presentation/providers/admin_provider.dart';
 import 'package:papikost_mobile/features/admin/presentation/providers/admin_users_provider.dart';
 import 'package:papikost_mobile/features/auth/presentation/providers/auth_provider.dart';
-import 'support/auth_fixtures.dart';
-import 'support/test_fonts.dart';
-import 'support/verification_fixtures.dart';
+import '../../support/fixtures/auth_fixtures.dart';
+import '../../support/helpers/test_fonts.dart';
+import '../../support/fixtures/verification_fixtures.dart';
 
 class _Repository extends Mock implements AdminUserRepository {}
 

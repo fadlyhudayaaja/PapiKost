@@ -7,8 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:papikost_mobile/data/models/kost_model.dart';
 import 'package:papikost_mobile/data/repositories/kost_repository.dart';
 import 'package:papikost_mobile/features/renter/catalog/pages/catalog_page.dart';
-import 'support/kost_fixtures.dart';
-import 'support/test_fonts.dart';
+import '../../support/fixtures/kost_fixtures.dart';
+import '../../support/helpers/test_fonts.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

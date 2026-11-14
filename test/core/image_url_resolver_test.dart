@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:papikost_mobile/core/network/image_url_resolver.dart';
-import 'support/image_redirect_fixtures.dart';
+import '../support/images/image_redirect_fixtures.dart';
 
 void main() {
   test(

@@ -13,10 +13,10 @@ import 'package:papikost_mobile/features/auth/presentation/pages/login_page.dart
 import 'package:papikost_mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:papikost_mobile/features/renter/ticket/pages/ticket_list_page.dart';
 import 'package:papikost_mobile/main.dart' as app;
-import 'support/auth_fixtures.dart';
-import 'support/test_fonts.dart';
-import 'support/kost_fixtures.dart';
-import 'support/ticket_fixtures.dart';
+import '../support/fixtures/auth_fixtures.dart';
+import '../support/helpers/test_fonts.dart';
+import '../support/fixtures/kost_fixtures.dart';
+import '../support/fixtures/ticket_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

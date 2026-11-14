@@ -6,9 +6,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:papikost_mobile/data/models/reservation_model.dart';
 import 'package:papikost_mobile/data/repositories/auth_repository.dart';
 import 'package:papikost_mobile/data/repositories/reservation_repository.dart';
-import 'support/auth_fixtures.dart';
-import 'support/kost_fixtures.dart';
-import 'support/reservation_fixtures.dart';
+import '../../support/fixtures/auth_fixtures.dart';
+import '../../support/fixtures/kost_fixtures.dart';
+import '../../support/fixtures/reservation_fixtures.dart';
 
 class _Auth extends Mock implements FirebaseAuth {}
 

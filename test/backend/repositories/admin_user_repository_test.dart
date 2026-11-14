@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:papikost_mobile/data/models/user_model.dart';
 import 'package:papikost_mobile/data/repositories/admin_user_repository.dart';
-import 'support/verification_fixtures.dart';
+import '../../support/fixtures/verification_fixtures.dart';
 
 class _Firestore extends Mock implements FirebaseFirestore {}
 

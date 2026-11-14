@@ -47,11 +47,36 @@ diimplementasikan. PapiBot memiliki fallback rekomendasi; respons Gemini nyata
 memerlukan konfigurasi API tersendiri. Halaman demo verifikasi dokumen penyewa
 disimpan di [arsip UI](docs/legacy/renter-verification/README.md).
 
+## Struktur pengujian
+
+Folder `test` tetap menjadi lokasi pengujian Flutter. Tes dikelompokkan
+berdasarkan bagian yang diperiksa:
+
+| Folder | Isi |
+| --- | --- |
+| `test/backend/repositories/` | Tes akses Firebase Auth dan Firestore melalui repository. |
+| `test/providers/` | Tes state dan perilaku provider. |
+| `test/widgets/` | Tes tampilan, dikelompokkan menurut fitur. |
+| `test/core/` | Tes utilitas dan resolusi URL gambar. |
+| `test/app/` | Tes startup dan navigasi aplikasi. |
+| `test/support/` | Data contoh, mock, pengujian gambar, dan helper font. |
+
+`test/support` dibagi menjadi `fixtures`, `images`, dan `helpers`. Semua folder
+ini masih berada dalam satu package Flutter. Kode aplikasi untuk mengakses
+Firebase berada di `lib/data/repositories/`; aturan akses server berada di
+`firestore.rules`, sedangkan tes aturannya berada di `firebase_tests/`.
+
 ## Validasi lokal
 
 ```sh
 flutter analyze --no-pub --no-fatal-infos
 flutter test --no-pub
+```
+
+Untuk menjalankan tes repository backend saja:
+
+```sh
+flutter test --no-pub test/backend
 ```
 
 Tes aturan Firestore memakai Node.js, Java, dan emulator lokal:

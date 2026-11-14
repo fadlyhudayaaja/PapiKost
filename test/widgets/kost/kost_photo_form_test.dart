@@ -1,4 +1,4 @@
-import 'support/image_fixtures.dart';
+import '../../support/images/image_fixtures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -7,8 +7,8 @@ import 'package:papikost_mobile/data/models/kost_model.dart';
 import 'package:papikost_mobile/features/owner/presentation/pages/kost_management_page.dart';
 import 'package:papikost_mobile/features/owner/presentation/providers/owner_provider.dart';
 import 'package:papikost_mobile/core/widgets/url_image.dart';
-import 'support/kost_fixtures.dart';
-import 'support/test_fonts.dart';
+import '../../support/fixtures/kost_fixtures.dart';
+import '../../support/helpers/test_fonts.dart';
 
 class _Owner extends Mock implements OwnerProvider {}
 

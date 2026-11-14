@@ -1,4 +1,4 @@
-import 'support/image_fixtures.dart';
+import '../../support/images/image_fixtures.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,9 +9,9 @@ import 'package:provider/provider.dart';
 import 'package:papikost_mobile/data/repositories/auth_repository.dart';
 import 'package:papikost_mobile/features/admin/presentation/pages/owner_verification_page.dart';
 import 'package:papikost_mobile/features/admin/presentation/providers/admin_provider.dart';
-import 'support/verification_fixtures.dart';
-import 'support/kost_fixtures.dart';
-import 'support/test_fonts.dart';
+import '../../support/fixtures/verification_fixtures.dart';
+import '../../support/fixtures/kost_fixtures.dart';
+import '../../support/helpers/test_fonts.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

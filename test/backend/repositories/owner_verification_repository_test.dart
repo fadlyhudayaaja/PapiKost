@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:papikost_mobile/data/repositories/auth_repository.dart';
 import 'package:papikost_mobile/data/repositories/owner_verification_repository.dart';
-import 'support/kost_fixtures.dart';
+import '../../support/fixtures/kost_fixtures.dart';
 import 'package:papikost_mobile/data/models/owner_submission.dart';
 
 class _Auth extends Mock implements FirebaseAuth {}

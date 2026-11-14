@@ -6,10 +6,10 @@ import 'package:papikost_mobile/data/models/ticket_model.dart';
 import 'package:papikost_mobile/data/repositories/auth_repository.dart';
 import 'package:papikost_mobile/features/renter/ticket/providers/renter_ticket_provider.dart';
 import 'package:papikost_mobile/features/owner/presentation/providers/owner_provider.dart';
-import 'support/auth_fixtures.dart';
-import 'support/kost_fixtures.dart';
-import 'support/reservation_fixtures.dart';
-import 'support/ticket_fixtures.dart';
+import '../support/fixtures/auth_fixtures.dart';
+import '../support/fixtures/kost_fixtures.dart';
+import '../support/fixtures/reservation_fixtures.dart';
+import '../support/fixtures/ticket_fixtures.dart';
 
 void main() {
   late MockTicketRepository repository;
